@@ -77,20 +77,24 @@ export const StatusBar: React.FC<StatusBarProps> = ({ isScrolled, onOpenProfile 
           onClick={onOpenProfile}
           aria-label={`${profile.currentStreak} day streak. Tap to open profile.`}
           style={{
-            background: 'var(--md-sys-color-surface-container)',
+            background: db.isStreakSecuredToday() ? 'var(--md-sys-color-tertiary-container)' : 'var(--md-sys-color-surface-container)',
             padding: '2px 8px',
-            borderRadius: 'var(--md-sys-shape-small)',
+            borderRadius: 'var(--md-sys-shape-full)',
             border: 'none',
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
             gap: '3px',
             fontSize: '11px',
+            transition: 'all 0.2s ease'
           }}
         >
           <span>{getArchetypeEmoji()}</span>
-          <span style={{ color: 'var(--md-sys-color-primary)', fontWeight: 800 }}>
-            {profile.currentStreak}d
+          <span style={{ 
+            color: db.isStreakSecuredToday() ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-primary)', 
+            fontWeight: 800 
+          }}>
+            {profile.currentStreak}d {db.isStreakSecuredToday() ? '✓' : '🔥'}
           </span>
         </button>
       </div>
