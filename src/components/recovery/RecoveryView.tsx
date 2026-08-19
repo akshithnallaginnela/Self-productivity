@@ -1,16 +1,20 @@
 /**
- * RecoveryView.tsx — Sobriety Shield & Recovery Dashboard
+ * RecoveryView.tsx — Duolingo-Style Dynamic Sobriety Streak Dashboard
  *
- * Implements pure Material Design 3 (material.io) layout paradigms:
- *   1. Clean Top Header with XP chip and streak overview
- *   2. Hero Streak Tonal Card with circular progress ring and M3 stadium action buttons
- *   3. Milestone Badges Chamber in a clean M3 surface container
- *   4. Subconscious Trigger Radar with inline form & grouped list items
+ * Implements pure Material Design 3 (material.io) layout paradigms & Duolingo streak rules:
+ *   1. Dynamic streak tracking: streak ONLY advances when at least 1 task/habit is completed today.
+ *   2. Real-time Streak Status Indicator:
+ *      - "🔥 Streak Secured Today!" when ≥1 task completed today
+ *      - "⚠️ Streak At Risk!" with 1-tap quick actions when pending today's task
+ *   3. Confetti celebration cannon upon earning today's streak extension.
+ *   4. Milestone Badges chamber with auto-unlock progress.
+ *   5. Subconscious Trigger Radar with inline form & resistance logs.
  *
- * Persists all metrics locally via the reactive LocalDatabase singleton.
+ * 100% dynamic, reactive, and fluidly responsive across all screen dimensions.
  */
 
 import React, { useState, useEffect } from 'react';
+import confetti from 'canvas-confetti';
 import {
   Flame,
   Plus,
@@ -18,8 +22,13 @@ import {
   Trophy,
   Target,
   Zap,
-  RotateCcw,
-  ShieldCheck
+  ShieldCheck,
+  CheckCircle2,
+  ListTodo,
+  BookOpen,
+  IndianRupee,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 import { UserProfile, MilestoneBadge, TriggerLog, TriggerCategory } from '../../types';
 import { db } from '../../services/db';
@@ -30,7 +39,7 @@ interface RecoveryViewProps {
 }
 
 /**
- * Renders the Material Design 3 Sobriety Recovery dashboard.
+ * Renders the Duolingo-style Dynamic Recovery Dashboard.
  */
 export const RecoveryView: React.FC<RecoveryViewProps> = () => {
   const [profile, setProfile] = useState<UserProfile>(db.getProfile());
@@ -43,8 +52,12 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
   const [triggerDesc, setTriggerDesc] = useState<string>('');
   const [triggerIntensity, setTriggerIntensity] = useState<number>(5);
 
+  /** Checks if streak is already earned today */
+  const isSecuredToday = db.isStreakSecuredToday();
+  const tasksDoneToday = profile.tasksCompletedToday || 0;
+
   /**
-   * Subscribes to the reactive database for live state updates.
+   * Subscribes to reactive database state updates.
    */
   useEffect(() => {
     const unsub = db.subscribe(() => {
@@ -69,6 +82,18 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
     return badges.find(b => !b.unlocked);
   };
 
+  /**
+   * Fires a festive confetti cannon when the daily streak is extended.
+   */
+  const triggerConfettiCelebration = () => {
+    confetti({
+      particleCount: 60,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#b45309', '#f59e0b', '#10b981', '#3b82f6']
+    });
+  };
+
   /** Handles logging a new urge trigger event. */
   const handleLogTrigger = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,15 +106,29 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
       resisted: true,
     });
 
+    triggerConfettiCelebration();
     setTriggerDesc('');
     setShowTriggerForm(false);
+  };
+
+  /** Completes a quick daily check-in habit to extend today's streak */
+  const handleQuickCheckin = () => {
+    const routines = db.getRoutines();
+    const nextPending = routines.find(r => !r.completed);
+    if (nextPending) {
+      db.toggleRoutineTask(nextPending.id);
+    } else {
+      // If all routines done, record daily sovereignty check
+      db.recordTaskCompletionAndEvaluateStreak('Daily Sovereignty Check-in');
+    }
+    triggerConfettiCelebration();
   };
 
   const circumference = 2 * Math.PI * 52;
   const nextMilestone = getNextMilestone();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
       {/* ── Top Header Bar ─────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -136,6 +175,8 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
           </button>
         </div>
       )}
+
+      {/* ── Hero Streak Container Card (M3 Tinted Container) ───────── */}
       <div className="md3-card-tinted" style={{ padding: '24px 16px', textAlign: 'center' }}>
         <div style={{ position: 'relative', display: 'inline-block' }}>
           <svg width="136" height="136" viewBox="0 0 120 120">
@@ -169,14 +210,14 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
             <text 
               x="60" y="74" textAnchor="middle"
               fill="var(--md-sys-color-on-primary-container)"
-              opacity="0.8"
+              opacity="0.85"
               style={{ fontFamily: 'var(--md-sys-typescale-label-medium-font)', fontSize: '11px', fontWeight: 700 }}
             >
               DAYS SOBER
             </text>
           </svg>
 
-          {/* Flame icon */}
+          {/* Animated flame */}
           <span className="animate-flame" style={{
             position: 'absolute',
             bottom: '0',
@@ -192,7 +233,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
           <p style={{
             fontFamily: 'var(--md-sys-typescale-body-medium-font)',
             fontSize: '14px',
-            fontWeight: 500,
+            fontWeight: 600,
             color: 'var(--md-sys-color-on-primary-container)'
           }}>
             Longest Record: <strong>{profile.longestStreak} days</strong> · Rank: <strong>{profile.warriorRank}</strong>
@@ -212,29 +253,60 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
           )}
         </div>
 
-        {/* Action Button & Daily Auto-Protection Status */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '16px' }}>
-          <button 
-            className="md3-button-filled md3-button-lg"
-            onClick={() => db.incrementStreak()}
-            style={{ width: '100%', maxWidth: '280px' }}
-          >
-            <Plus size={18} />
-            Add 1 Day SOBER (+150 XP)
-          </button>
+        {/* ── Duolingo Daily Streak Dynamic Status Box ─────────────── */}
+        <div style={{
+          marginTop: '16px',
+          padding: '12px 14px',
+          background: isSecuredToday ? 'var(--md-sys-color-surface-container-lowest)' : 'rgba(255, 255, 255, 0.65)',
+          borderRadius: 'var(--md-sys-shape-medium)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          textAlign: 'left',
+          boxShadow: 'var(--md-sys-elevation-1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: 'var(--md-sys-shape-full)',
+              background: isSecuredToday ? 'var(--md-sys-color-tertiary-container)' : 'var(--md-sys-color-error-container)',
+              color: isSecuredToday ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-on-error-container)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              {isSecuredToday ? <CheckCircle2 size={20} /> : <Flame size={20} />}
+            </div>
 
-          <div style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            color: 'var(--md-sys-color-on-primary-container)',
-            opacity: 0.85,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}>
-            <ShieldCheck size={13} />
-            Auto-Protected · 1 Missed Day Resets Streak to 0
+            <div>
+              <div style={{
+                fontSize: '13px',
+                fontWeight: 800,
+                color: isSecuredToday ? 'var(--md-sys-color-on-surface)' : 'var(--md-sys-color-error)'
+              }}>
+                {isSecuredToday ? 'Streak Secured for Today! ✓' : 'Streak Pending for Today!'}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)', marginTop: '2px' }}>
+                {isSecuredToday
+                  ? `${tasksDoneToday} task(s) completed today · Keep going!`
+                  : 'Complete at least 1 task today to extend your streak.'}
+              </div>
+            </div>
           </div>
+
+          {!isSecuredToday && (
+            <button
+              type="button"
+              className="md3-button-filled md3-button-sm"
+              onClick={handleQuickCheckin}
+              style={{ flexShrink: 0, gap: '4px' }}
+            >
+              <Sparkles size={13} />
+              Complete 1
+            </button>
+          )}
         </div>
       </div>
 

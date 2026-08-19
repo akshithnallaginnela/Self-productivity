@@ -1,18 +1,15 @@
 /**
- * db.ts — Zero-Cost Local-First Reactive Database Service
+ * db.ts — Zero-Cost Local-First Reactive Database & Duolingo Streak Engine
  *
  * Implements a 100% offline, privacy-first data store utilizing Web LocalStorage
  * with a reactive publish/subscribe architecture.
  *
- * Capabilities:
- *   1. Reactive state management with listener subscriptions (notify on mutation)
- *   2. User profile, sobriety streak calculation, XP progression, and rank promotion
- *   3. Milestone badge evaluation and auto-unlock mechanics
- *   4. Morning and evening routine task management with strict sequential checking
- *   5. Freelance income ledger with INR (₹) transactions
- *   6. Subconscious trigger logging with intensity metrics and resistance tracking
- *   7. Reflection journaling with local sentiment scores
- *   8. Complete 1-click JSON backup/import & CSV export
+ * Dynamic Duolingo-Style Streak Mechanics:
+ *   1. Opening the app alone does NOT increment your streak.
+ *   2. You MUST complete at least 1 task (routine, Pomodoro, income, journal, or urge resistance).
+ *   3. The FIRST task completed on any calendar day officially extends & secures the streak (+150 XP).
+ *   4. If an entire calendar day passes without completing at least 1 task, the streak drops to 0!
+ *   5. Automatically notifies all UI listeners and syncs to Android Native AppWidgets.
  */
 
 import {
@@ -66,16 +63,18 @@ export const DEFAULT_ROUTINES: RoutineTask[] = [
   { id: 'e-3', name: '10:00 PM Lights Out (7-8h Sleep Target)', category: 'EVENING', orderIndex: 3, durationMinutes: 0, timeHint: '10:00 PM', iconName: 'Moon', isMandatory: true, completed: false }
 ];
 
-/** Default User Profile seed */
+/** Default User Profile seed with Duolingo streak tracking fields */
 export const DEFAULT_PROFILE: UserProfile = {
   id: 'warrior-01',
   displayName: 'Akshith Warrior',
   avatar: '🦅',
   isBiometricEnabled: true,
   selectedArchetype: 'EAGLE',
-  targetMonthlyIncome: 120000, // ₹1,20,000 INR
+  targetMonthlyIncome: 120000,
   sobrietyStartDate: '2026-07-29T00:00:00.000Z',
   lastLoginDate: new Date().toISOString().split('T')[0],
+  lastStreakExtendedDate: new Date().toISOString().split('T')[0],
+  tasksCompletedToday: 3,
   currentStreak: 21,
   longestStreak: 21,
   xpPoints: 3450,
@@ -122,7 +121,7 @@ export const DEFAULT_JOURNALS: JournalEntry[] = [
 ];
 
 /**
- * LocalDatabase class — encapsulates storage operations and reactive dispatch.
+ * LocalDatabase class — encapsulates storage operations, Duolingo streak engine, and reactive dispatch.
  */
 class LocalDatabase {
   private listeners: (() => void)[] = [];
@@ -222,71 +221,114 @@ class LocalDatabase {
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
-   * RECOVERY & STREAK METHODS
+   * DUOLINGO-STYLE DYNAMIC STREAK ENGINE
    * ──────────────────────────────────────────────────────────────────────── */
 
   /**
-   * Verifies daily streak integrity based on calendar days elapsed since last login.
-   * If the user misses 1 or more consecutive calendar days without opening the app,
-   * the streak is automatically reset to 0 and a fatigue/lapse audit entry is logged.
+   * Verifies daily streak integrity based on calendar days elapsed since last task completion.
+   * If an entire calendar day passes without completing at least 1 task, the streak drops to 0!
+   * Also resets daily tasks completed counter when a new calendar day starts.
    *
    * @returns {{ resetOccurred: boolean; daysMissed: number }} Integrity check result
    */
   public checkDailyStreakIntegrity(): { resetOccurred: boolean; daysMissed: number } {
     const profile = this.getProfile();
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const lastDate = profile.lastLoginDate || today;
+    const lastActiveDate = profile.lastStreakExtendedDate || profile.lastLoginDate || today;
 
     const todayObj = new Date(today);
-    const lastObj = new Date(lastDate);
-    const diffTime = todayObj.getTime() - lastObj.getTime();
+    const lastActiveObj = new Date(lastActiveDate);
+    const diffTime = todayObj.getTime() - lastActiveObj.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     let resetOccurred = false;
 
+    // If new day, reset today's tasks completed count
+    if (profile.lastLoginDate !== today) {
+      this.updateProfile({
+        lastLoginDate: today,
+        tasksCompletedToday: (profile.lastStreakExtendedDate === today) ? profile.tasksCompletedToday : 0
+      });
+    }
+
+    // If user missed 1 or more full days without completing a task
     if (diffDays > 1 && profile.currentStreak > 0) {
-      // Missed 1 or more full days without opening the app!
       resetOccurred = true;
       const lostStreak = profile.currentStreak;
 
       this.updateProfile({
         currentStreak: 0,
         sobrietyStartDate: new Date().toISOString(),
-        lastLoginDate: today,
-        streakResetReason: `Missed ${diffDays - 1} day(s) check-in (Automatic daily inactivity reset)`
+        tasksCompletedToday: 0,
+        streakResetReason: `Missed daily check-in (0 tasks completed on ${lastActiveDate})`
       });
 
       this.addTrigger({
         category: 'FATIGUE',
-        description: `Streak of ${lostStreak} days reset to 0: Inactivity (${diffDays} days without app check-in)`,
-        intensity: 7,
+        description: `Streak of ${lostStreak} days reset to 0: Missed daily task requirement (${diffDays} days inactive)`,
+        intensity: 8,
         resisted: false
       });
-    } else {
-      if (profile.lastLoginDate !== today) {
-        this.updateProfile({ lastLoginDate: today });
-      }
     }
 
     return { resetOccurred, daysMissed: Math.max(0, diffDays - 1) };
   }
 
   /**
-   * Increments the current streak counter by 1 day, updates longest streak if applicable,
-   * awards +150 XP, and evaluates milestone badge unlock criteria.
-   * @returns {UserProfile} Updated profile with new streak
+   * Records that the user completed an action/task today.
+   * If this is the user's FIRST task of the day, it automatically EXTENDS & SECURES
+   * their sobriety streak for today and awards +150 XP!
+   *
+   * @param {string} [actionDescription] Description of completed task/action
+   * @returns {{ streakExtended: boolean; currentStreak: number; isFirstToday: boolean }} Result
    */
-  public incrementStreak(): UserProfile {
+  public recordTaskCompletionAndEvaluateStreak(actionDescription?: string): {
+    streakExtended: boolean;
+    currentStreak: number;
+    isFirstToday: boolean;
+  } {
     const profile = this.getProfile();
-    const newStreak = profile.currentStreak + 1;
-    const newLongest = Math.max(newStreak, profile.longestStreak);
-    const updated = this.updateProfile({
-      currentStreak: newStreak,
-      longestStreak: newLongest,
-      xpPoints: profile.xpPoints + 150
-    });
-    this.evaluateBadges(newStreak);
-    return updated;
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const tasksDone = (profile.tasksCompletedToday || 0) + 1;
+    const isFirstToday = profile.lastStreakExtendedDate !== today;
+
+    if (isFirstToday) {
+      // First task of the day! Streak is secured and incremented!
+      const newStreak = profile.currentStreak + 1;
+      const newLongest = Math.max(newStreak, profile.longestStreak);
+
+      this.updateProfile({
+        currentStreak: newStreak,
+        longestStreak: newLongest,
+        lastStreakExtendedDate: today,
+        lastLoginDate: today,
+        tasksCompletedToday: tasksDone,
+        xpPoints: profile.xpPoints + 150,
+        streakResetReason: undefined
+      });
+
+      this.evaluateBadges(newStreak);
+
+      return { streakExtended: true, currentStreak: newStreak, isFirstToday: true };
+    } else {
+      // Already secured today, increment today's completed task count
+      this.updateProfile({
+        tasksCompletedToday: tasksDone,
+        lastLoginDate: today
+      });
+
+      return { streakExtended: false, currentStreak: profile.currentStreak, isFirstToday: false };
+    }
+  }
+
+  /**
+   * Checks whether the user has already secured their streak for today by completing at least 1 task.
+   * @returns {boolean} True if secured today, false if streak is pending / at risk
+   */
+  public isStreakSecuredToday(): boolean {
+    const profile = this.getProfile();
+    const today = new Date().toISOString().split('T')[0];
+    return profile.lastStreakExtendedDate === today && (profile.tasksCompletedToday || 0) > 0;
   }
 
   /**
@@ -298,7 +340,8 @@ class LocalDatabase {
   public resetStreak(reason?: string): UserProfile {
     const updated = this.updateProfile({
       currentStreak: 0,
-      sobrietyStartDate: new Date().toISOString()
+      sobrietyStartDate: new Date().toISOString(),
+      tasksCompletedToday: 0
     });
     if (reason) {
       this.addTrigger({
@@ -360,7 +403,7 @@ class LocalDatabase {
 
   /**
    * Toggles task completion state, checks sequential order adherence for morning routines,
-   * awards discipline XP (50 XP for sequential, 25 XP for out-of-order), and persists state.
+   * dynamically evaluates daily streak extension, and persists state.
    * @param {string} id Unique task identifier
    * @returns {{ routines: RoutineTask[]; sequenceValid: boolean }} Updated tasks and validity flag
    */
@@ -400,6 +443,8 @@ class LocalDatabase {
     if (newCompleted) {
       const profile = this.getProfile();
       this.updateProfile({ xpPoints: profile.xpPoints + (sequenceValid ? 50 : 25) });
+      // Dynamically evaluate & extend Duolingo daily streak!
+      this.recordTaskCompletionAndEvaluateStreak(`Routine: ${target.name}`);
     }
 
     this.notify();
@@ -429,7 +474,8 @@ class LocalDatabase {
   }
 
   /**
-   * Logs a new freelance income transaction in INR (₹) and awards +100 XP.
+   * Logs a new freelance income transaction in INR (₹), awards +100 XP,
+   * and dynamically evaluates daily streak extension.
    * @param {Omit<IncomeEntry, 'id' | 'createdAt'>} entry Income parameters
    * @returns {IncomeEntry} Newly created and saved entry
    */
@@ -445,6 +491,9 @@ class LocalDatabase {
     
     const profile = this.getProfile();
     this.updateProfile({ xpPoints: profile.xpPoints + 100 });
+
+    // Dynamically extend Duolingo streak
+    this.recordTaskCompletionAndEvaluateStreak(`Income: ${entry.clientName} (₹${entry.amount})`);
 
     this.notify();
     return newEntry;
@@ -474,7 +523,7 @@ class LocalDatabase {
   }
 
   /**
-   * Logs a new urge trigger event with intensity (1-10) and resistance status.
+   * Logs a new urge trigger event. If resisted, dynamically evaluates daily streak extension.
    * @param {Omit<TriggerLog, 'id' | 'recordedAt'>} trigger Trigger details
    * @returns {TriggerLog} Saved trigger log
    */
@@ -487,6 +536,11 @@ class LocalDatabase {
     };
     const updated = [newTrigger, ...triggers];
     localStorage.setItem(STORAGE_KEYS.TRIGGERS, JSON.stringify(updated));
+
+    if (trigger.resisted) {
+      this.recordTaskCompletionAndEvaluateStreak(`Resisted Urge: ${trigger.category}`);
+    }
+
     this.notify();
     return newTrigger;
   }
@@ -505,7 +559,7 @@ class LocalDatabase {
   }
 
   /**
-   * Persists a new reflection journal entry and awards +75 XP.
+   * Persists a new reflection journal entry, awards +75 XP, and extends daily streak.
    * @param {string} prompt Daily introspective prompt
    * @param {string} content User reflection text
    * @param {number} [sentimentScore=0.8] Local NLP sentiment score (0.0 to 1.0)
@@ -526,6 +580,10 @@ class LocalDatabase {
     const updated = [newJournal, ...journals];
     localStorage.setItem(STORAGE_KEYS.JOURNALS, JSON.stringify(updated));
     this.updateProfile({ xpPoints: profile.xpPoints + 75 });
+
+    // Dynamically extend Duolingo streak
+    this.recordTaskCompletionAndEvaluateStreak('Reflection Journal Saved');
+
     this.notify();
     return newJournal;
   }
