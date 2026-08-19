@@ -1,60 +1,54 @@
 /* ============================================================================
- * SYSTEM BARS — Edge-to-Edge Styling
+ * SYSTEM BARS — Edge-to-Edge Styling & Navigation Indicator Clarity
  * Reference: https://developer.android.com/design/ui/mobile/guides/foundations/system-bars
- *
- * Key principles from the official Android guidelines:
- *   1. System bars are TRANSPARENT — app content draws behind them
- *   2. Status bar icons adapt to light/dark content behind them
- *   3. Gesture navigation bar is a thin transparent pill, no background
- *   4. No interactive elements should be placed behind the gesture zone
- *   5. Use WindowInsets (CSS env(safe-area-inset-*)) for real-device safety
+ * Reference: https://m3.material.io/components/navigation-bar/overview
  * ========================================================================= */
 
-/* ── Status Bar (Transparent Overlay) ────────────────────────────────────── */
+/* ── 1. Status Bar (Transparent Edge-to-Edge Overlay) ─────────────────────── */
 .system-status-bar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 44px;
+  height: 48px;
   padding: 0 20px;
   padding-top: env(safe-area-inset-top, 0px);
   display: flex;
   align-items: center;
   justify-content: space-between;
   z-index: 50;
-  pointer-events: none;       /* content behind is scrollable */
-  background: transparent;    /* OFFICIAL: must be transparent */
+  pointer-events: none;       /* Content behind is smoothly scrollable */
+  background: transparent;    /* OFFICIAL: 100% transparent to let gradient flow through */
   color: var(--md-sys-color-on-surface);
   font-family: var(--md-sys-typescale-label-large-font);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  transition: background-color var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-standard),
+              backdrop-filter var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-standard);
 }
 
-/* Allow clickable items inside transparent status bar */
 .system-status-bar > * {
   pointer-events: auto;
 }
 
-/* Status bar glass effect when content scrolls behind */
+/* Frosted glass transition when content scrolls underneath */
 .system-status-bar.scrolled {
-  background: rgba(254, 247, 255, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255, 251, 247, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
-/* Camera punchhole cutout (centered, Android 14 Pixel style) */
+/* Central camera punchhole cutout */
 .status-bar-punchhole {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   background: #1d1b20;
   border-radius: var(--md-sys-shape-full);
   border: 1.5px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
 }
 
-/* Status bar icon cluster */
 .status-bar-icons {
   display: flex;
   align-items: center;
@@ -63,10 +57,11 @@
 
 .status-bar-time {
   font-variant-numeric: tabular-nums;
+  font-weight: 800;
 }
 
 
-/* ── M3 Navigation Bar (80dp) ────────────────────────────────────────────── */
+/* ── 2. M3 Navigation Bar (80dp) with Enclosed Active Indicator Pill ───────── */
 .system-nav-bar {
   position: absolute;
   bottom: 0;
@@ -74,22 +69,24 @@
   right: 0;
   height: 80px;
   background: var(--md-sys-color-surface-container);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   display: flex;
   align-items: center;
   justify-content: space-around;
   padding: 0 8px;
   z-index: 45;
-  /* Subtle top edge — not a border, just a tonal separator */
+  border-top: 1px solid rgba(0, 0, 0, 0.03);
 }
 
-/* Individual navigation destination (min 48dp touch target) */
+/* Navigation destination item (Min 48dp touch target) */
 .nav-destination {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-width: 48px;
+  min-width: 52px;
   padding: 0;
   background: none;
   border: none;
@@ -101,7 +98,7 @@
   font-family: var(--md-sys-typescale-label-medium-font);
 }
 
-/* Active indicator pill (64×32dp with 16dp corner radius) */
+/* Active indicator pill (64×32dp enclosed container) */
 .nav-indicator-pill {
   width: 64px;
   height: 32px;
@@ -110,37 +107,37 @@
   align-items: center;
   justify-content: center;
   position: relative;
+  color: inherit;
   transition:
     background-color var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-emphasized),
-    transform        var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-emphasized);
+    color var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-emphasized),
+    transform var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-emphasized);
 }
 
-/* Active state: filled pill with primaryContainer color */
+/* Active State: Filled enclosed pill with secondaryContainer color */
 .nav-destination.active .nav-indicator-pill {
   background-color: var(--md-sys-color-secondary-container);
-}
-
-/* Active state: icon becomes onSecondaryContainer, label becomes onSurface */
-.nav-destination.active {
-  color: var(--md-sys-color-on-surface);
-}
-.nav-destination.active .nav-indicator-pill {
   color: var(--md-sys-color-on-secondary-container);
 }
 
-/* Label (M3 label-medium: 12sp, weight 500) */
+.nav-destination.active {
+  color: var(--md-sys-color-on-surface);
+}
+
 .nav-destination-label {
   font-size: var(--md-sys-typescale-label-medium-size);
-  font-weight: var(--md-sys-typescale-label-medium-weight);
+  font-weight: 600;
   letter-spacing: var(--md-sys-typescale-label-medium-tracking);
   line-height: 1;
+  transition: font-weight 0.15s ease, color 0.15s ease;
 }
 
 .nav-destination.active .nav-destination-label {
-  font-weight: 700;
+  font-weight: 800;
+  color: var(--md-sys-color-on-surface);
 }
 
-/* M3 State layer ripple (hover 8%, press 12%) */
+/* State layer ripples */
 .nav-indicator-pill::after {
   content: '';
   position: absolute;
@@ -160,7 +157,7 @@
 }
 
 
-/* ── Gesture Navigation Bar (Transparent) ────────────────────────────────── */
+/* ── 3. Gesture Navigation Bar (100% Transparent) ─────────────────────────── */
 .system-gesture-bar {
   position: absolute;
   bottom: 0;
@@ -170,20 +167,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;  /* OFFICIAL: "Keep transparent" */
+  background: transparent;
   z-index: 46;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Gesture handle pill (M3 spec: centered, thin, low contrast) */
 .gesture-handle-pill {
   width: 72px;
   height: 4px;
   background: var(--md-sys-color-on-surface-variant);
-  opacity: 0.4;
+  opacity: 0.35;
   border-radius: var(--md-sys-shape-full);
   transition:
-    width   var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    width var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
     opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
 }
 

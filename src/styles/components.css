@@ -1,28 +1,20 @@
 /* ============================================================================
  * MATERIAL DESIGN 3 — OFFICIAL COMPONENT SYSTEM (https://m3.material.io)
  *
- * Implements pure, modern Android Material Design 3 component specifications:
- *   1. Cards (Elevated, Filled, Outlined, Tinted Container)
- *   2. Buttons (Filled, Tonal, Outlined, Text, Elevated, Segmented)
- *   3. Floating Action Buttons (Extended, Standard, Error)
- *   4. Chips (Assist, Filter, Input, Suggestion)
- *   5. Segmented Buttons (Connected multi-select & single-select groups)
- *   6. List Containers & Grouped Settings-style cards
- *   7. Text Fields (Filled & Outlined with active indicator lines)
- *   8. Modals & Dialogs
- *   9. Progress Indicators & Sliders
+ * Implements pure Material 3 Tonal Elevation Surfaces (no harsh borders),
+ * Dynamic Material You Tinted Cards, Segmented Buttons, and Stadium Controls.
  * ========================================================================= */
 
 
-/* ── 1. CARDS & CONTAINERS ────────────────────────────────────────────────── */
+/* ── 1. TONAL ELEVATION CARDS & SURFACES ──────────────────────────────────── */
 
-/* Standard Material 3 Surface Container Card */
+/* Standard M3 Surface Container Card (Tonal elevation via color tone + subtle shadow) */
 .md3-card {
   background: var(--md-sys-color-surface-container-low);
   border-radius: var(--md-sys-shape-large);
   padding: 16px;
-  box-shadow: var(--md-sys-elevation-0);
-  border: 1px solid var(--md-sys-color-outline-variant);
+  box-shadow: var(--md-sys-elevation-1);
+  border: 1px solid rgba(0, 0, 0, 0.03);
   position: relative;
   overflow: hidden;
   transition:
@@ -30,12 +22,16 @@
     background-color var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard);
 }
 
-/* Elevated Card (Level 1 elevation, smooth hover to Level 2) */
+.md3-card:hover {
+  box-shadow: var(--md-sys-elevation-2);
+}
+
+/* Elevated Card (Level 2 elevation for focused hero elements) */
 .md3-card-elevated {
-  background: var(--md-sys-color-surface-container-low);
+  background: var(--md-sys-color-surface-container-lowest);
   border-radius: var(--md-sys-shape-large);
   padding: 18px;
-  box-shadow: var(--md-sys-elevation-1);
+  box-shadow: var(--md-sys-elevation-2);
   border: none;
   position: relative;
   overflow: hidden;
@@ -43,26 +39,15 @@
 }
 
 .md3-card-elevated:hover {
-  box-shadow: var(--md-sys-elevation-2);
+  box-shadow: var(--md-sys-elevation-3);
 }
 
-/* Filled Card (Uses surface-container-highest tone, no shadow) */
+/* Filled Card (Uses surface-container-high tone, zero shadow) */
 .md3-card-filled {
-  background: var(--md-sys-color-surface-container-highest);
+  background: var(--md-sys-color-surface-container-high);
   border-radius: var(--md-sys-shape-large);
   padding: 16px;
   border: none;
-  box-shadow: var(--md-sys-elevation-0);
-  position: relative;
-  overflow: hidden;
-}
-
-/* Outlined Card (Surface tone + 1px outline-variant border) */
-.md3-card-outlined {
-  background: var(--md-sys-color-surface);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: var(--md-sys-shape-large);
-  padding: 16px;
   box-shadow: var(--md-sys-elevation-0);
   position: relative;
   overflow: hidden;
@@ -73,9 +58,9 @@
   background: var(--md-sys-color-primary-container);
   color: var(--md-sys-color-on-primary-container);
   border-radius: var(--md-sys-shape-large);
-  padding: 18px;
+  padding: 20px 16px;
   border: none;
-  box-shadow: var(--md-sys-elevation-0);
+  box-shadow: var(--md-sys-elevation-1);
   position: relative;
   overflow: hidden;
 }
@@ -85,9 +70,9 @@
   background: var(--md-sys-color-secondary-container);
   color: var(--md-sys-color-on-secondary-container);
   border-radius: var(--md-sys-shape-large);
-  padding: 18px;
+  padding: 18px 16px;
   border: none;
-  box-shadow: var(--md-sys-elevation-0);
+  box-shadow: var(--md-sys-elevation-1);
   position: relative;
   overflow: hidden;
 }
@@ -97,20 +82,21 @@
   background: var(--md-sys-color-tertiary-container);
   color: var(--md-sys-color-on-tertiary-container);
   border-radius: var(--md-sys-shape-large);
-  padding: 18px;
+  padding: 18px 16px;
   border: none;
-  box-shadow: var(--md-sys-elevation-0);
+  box-shadow: var(--md-sys-elevation-1);
   position: relative;
   overflow: hidden;
 }
 
 
-/* ── 2. GROUPED LIST CONTAINERS (Google Settings / Android Tasks Style) ───── */
+/* ── 2. GROUPED LIST CONTAINERS (Google Tasks & Settings Style) ───────────── */
 
 .md3-list-group {
   background: var(--md-sys-color-surface-container-low);
   border-radius: var(--md-sys-shape-large);
-  border: 1px solid var(--md-sys-color-outline-variant);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+  box-shadow: var(--md-sys-elevation-1);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -123,7 +109,7 @@
   padding: 14px 16px;
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--md-sys-color-surface-container-highest);
+  border-bottom: 1px solid var(--md-sys-color-surface-container-high);
   cursor: pointer;
   text-align: left;
   width: 100%;
@@ -136,17 +122,16 @@
 }
 
 .md3-list-group-item:hover {
-  background-color: var(--md-sys-color-surface-container-high);
+  background-color: var(--md-sys-color-surface-container);
 }
 
 .md3-list-group-item:active {
-  background-color: var(--md-sys-color-surface-container-highest);
+  background-color: var(--md-sys-color-surface-container-high);
 }
 
 
 /* ── 3. BUTTONS (Official M3 Stadium Pill Shapes) ─────────────────────────── */
 
-/* Common Button Base */
 .md3-button-filled,
 .md3-button-tonal,
 .md3-button-outlined,
@@ -189,7 +174,8 @@
 .md3-button-lg {
   height: 48px;
   padding: 0 24px;
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 700;
   gap: 10px;
 }
 
@@ -197,11 +183,11 @@
 .md3-button-filled {
   background: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
-  box-shadow: var(--md-sys-elevation-0);
+  box-shadow: var(--md-sys-elevation-1);
 }
 
 .md3-button-filled:hover {
-  box-shadow: var(--md-sys-elevation-1);
+  box-shadow: var(--md-sys-elevation-2);
 }
 
 .md3-button-filled:active {
@@ -227,11 +213,11 @@
 .md3-button-outlined {
   background: transparent;
   color: var(--md-sys-color-primary);
-  border: 1px solid var(--md-sys-color-outline);
+  border: 1px solid var(--md-sys-color-outline-variant);
 }
 
 .md3-button-outlined:hover {
-  background: var(--md-sys-color-surface-container-high);
+  background: var(--md-sys-color-surface-container);
 }
 
 .md3-button-outlined:active {
@@ -246,7 +232,7 @@
 }
 
 .md3-button-text:hover {
-  background: var(--md-sys-color-surface-container-high);
+  background: var(--md-sys-color-surface-container);
 }
 
 
@@ -256,8 +242,8 @@
   display: inline-flex;
   width: 100%;
   border-radius: var(--md-sys-shape-full);
-  background: var(--md-sys-color-surface-container-low);
-  border: 1px solid var(--md-sys-color-outline);
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
   padding: 2px;
   position: relative;
   overflow: hidden;
@@ -288,14 +274,14 @@
 }
 
 .md3-segmented-item.active {
-  background: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
-  font-weight: 700;
+  background: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-primary);
+  font-weight: 800;
   box-shadow: var(--md-sys-elevation-1);
 }
 
 .md3-segmented-item:hover:not(.active) {
-  background: var(--md-sys-color-surface-container-highest);
+  background: var(--md-sys-color-surface-container-high);
 }
 
 
@@ -305,13 +291,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  height: 56px;
+  gap: 10px;
+  height: 54px;
   padding: 0 20px;
   background: var(--md-sys-color-primary-container);
   color: var(--md-sys-color-on-primary-container);
   border: none;
-  border-radius: var(--md-sys-shape-large); /* 16dp rounded rectangle per M3 */
+  border-radius: var(--md-sys-shape-large); /* 20dp rounded rectangle per M3 */
   font-family: var(--md-sys-typescale-label-large-font);
   font-size: var(--md-sys-typescale-label-large-size);
   font-weight: 700;
@@ -346,13 +332,13 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  height: 30px;
   padding: 0 12px;
-  background: var(--md-sys-color-surface);
+  background: var(--md-sys-color-surface-container-low);
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: var(--md-sys-shape-small);
   font-family: var(--md-sys-typescale-label-large-font);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--md-sys-color-on-surface);
   cursor: pointer;
@@ -376,8 +362,8 @@
 
 .md3-field-outlined {
   width: 100%;
-  background: var(--md-sys-color-surface);
-  border: 1px solid var(--md-sys-color-outline);
+  background: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: var(--md-sys-shape-small);
   color: var(--md-sys-color-on-surface);
   padding: 12px 14px;
@@ -390,13 +376,13 @@
   outline: none;
   border-color: var(--md-sys-color-primary);
   border-width: 2px;
-  padding: 11px 13px; /* Prevent layout shift */
+  padding: 11px 13px;
 }
 
 .md3-select {
   width: 100%;
-  background: var(--md-sys-color-surface);
-  border: 1px solid var(--md-sys-color-outline);
+  background: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: var(--md-sys-shape-small);
   color: var(--md-sys-color-on-surface);
   padding: 12px 14px;

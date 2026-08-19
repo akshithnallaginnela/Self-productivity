@@ -1,6 +1,6 @@
 /* ============================================================================
- * GLOBAL RESET & LAYOUT COMPOSITION
- * Imports all M3 design sub-systems and provides the root layout shell.
+ * GLOBAL RESET & PROGRESSIVE THEME CANVAS GRADIENT
+ * Imports all M3 design sub-systems and provides the edge-to-edge layout shell.
  * ========================================================================= */
 
 @import './tokens.css';
@@ -31,7 +31,7 @@ html, body {
 }
 
 
-/* ── Scrollbar (subtle M3 styling) ───────────────────────────────────────── */
+/* ── Subtle M3 Scrollbar ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -75,19 +75,13 @@ html, body {
   max-width: 412px;
   height: 892px;
   max-height: 94vh;
-  background: var(--md-sys-color-surface);
+  background: var(--md-sys-color-background);
   border-radius: var(--md-sys-shape-extra-large);
-  /* 
-   * Multi-layered shadow to simulate a real phone chassis:
-   *   1. Inner bezel ring (thin white border)
-   *   2. Outer bezel ring (subtle outline)
-   *   3. Depth shadow (simulates phone on a desk)
-   */
   box-shadow:
     0 0 0 8px #ffffff,
     0 0 0 9.5px var(--md-sys-color-outline-variant),
-    0 25px 60px -12px rgba(0, 0, 0, 0.22),
-    0 0 30px rgba(0, 0, 0, 0.04);
+    0 25px 60px -12px rgba(0, 0, 0, 0.18),
+    0 0 30px rgba(0, 0, 0, 0.03);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -95,7 +89,7 @@ html, body {
   transition: box-shadow var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-standard);
 }
 
-/* Full-screen adaptive mode (no phone frame) */
+/* Full-screen adaptive fluid mode */
 .android-device-frame.fluid-mode {
   max-width: 100%;
   height: 100vh;
@@ -115,38 +109,44 @@ html, body {
 }
 
 
-/* ── Main Content Scroll Area (Edge-to-Edge) ─────────────────────────────── */
+/* ── Main Content Scroll Area with Progressive Theme Gradient ─────────────── */
 .app-content-area {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  /* Edge-to-edge: content starts behind status bar (44px) and ends above nav bar (80px) + gesture (20px) */
-  padding: 52px 16px 108px 16px;
+  /* Seamless edge-to-edge padding: content starts behind transparent status bar (48px) */
+  padding: 56px 16px 108px 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   position: relative;
-  background: var(--md-sys-color-surface);
+  /* Progressive Theme Canvas Gradient: Calming pastel at top near streak counter -> clean neutral surface at bottom */
+  background: linear-gradient(
+    180deg,
+    var(--md-sys-canvas-gradient-top) 0%,
+    var(--md-sys-canvas-gradient-bottom) 480px,
+    var(--md-sys-color-background) 100%
+  );
   scroll-behavior: smooth;
 }
 
 
-/* ── Floating Crisis FAB (Extended, positioned above nav bar) ────────────── */
+/* ── Floating Crisis FAB (Positioned cleanly above M3 nav bar) ────────────── */
 .crisis-fab {
   position: absolute;
-  bottom: 108px; /* 80dp nav + 20dp gesture + 8dp margin */
+  bottom: 106px; /* 80dp nav + 20dp gesture + 6dp margin */
   right: 16px;
   z-index: 42;
 }
 
 
-/* ── Viewport Switcher Toolbar ───────────────────────────────────────────── */
+/* ── Top Viewport Switcher Toolbar ────────────────────────────────────────── */
 .viewport-toolbar {
   position: fixed;
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--md-sys-color-outline-variant);
@@ -167,7 +167,7 @@ html, body {
   padding: 6px 12px;
   font-family: var(--md-sys-typescale-label-large-font);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
