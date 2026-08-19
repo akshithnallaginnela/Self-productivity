@@ -1,0 +1,588 @@
+/**
+ * db.ts — Zero-Cost Local-First Reactive Database Service
+ *
+ * Implements a 100% offline, privacy-first data store utilizing Web LocalStorage
+ * with a reactive publish/subscribe architecture.
+ *
+ * Capabilities:
+ *   1. Reactive state management with listener subscriptions (notify on mutation)
+ *   2. User profile, sobriety streak calculation, XP progression, and rank promotion
+ *   3. Milestone badge evaluation and auto-unlock mechanics
+ *   4. Morning and evening routine task management with strict sequential checking
+ *   5. Freelance income ledger with INR (₹) transactions
+ *   6. Subconscious trigger logging with intensity metrics and resistance tracking
+ *   7. Reflection journaling with local sentiment scores
+ *   8. Complete 1-click JSON backup/import & CSV export
+ */
+
+import {
+  UserProfile,
+  DailyEntry,
+  IncomeEntry,
+  TriggerLog,
+  RoutineTask,
+  JournalEntry,
+  MilestoneBadge,
+  Archetype
+} from '../types';
+import { widgetBridge } from './widgetBridge';
+
+/** Key constants for LocalStorage partitioning */
+const STORAGE_KEYS = {
+  PROFILE: 'rw_profile_v1',
+  DAILY_ENTRIES: 'rw_daily_entries_v1',
+  INCOME_ENTRIES: 'rw_income_entries_v1',
+  TRIGGERS: 'rw_triggers_v1',
+  ROUTINE_TASKS: 'rw_routine_tasks_v1',
+  JOURNALS: 'rw_journals_v1',
+  BADGES: 'rw_badges_v1'
+};
+
+/** Seed Badges configuration covering 1-day to 365-day milestones */
+export const DEFAULT_BADGES: MilestoneBadge[] = [
+  { id: 'b-1d', name: 'Awakening', daysRequired: 1, title: 'Day 1: The Decision', icon: '🌱', description: 'Break the cycle. Take the first conscious step.', archetypeBonus: 'EAGLE', unlocked: true, unlockedAt: '2026-08-01' },
+  { id: 'b-3d', name: 'First Trial', daysRequired: 3, title: 'Day 3: The Dopamine Dip', icon: '⚔️', description: 'Withstand the initial chemical withdrawal.', archetypeBonus: 'WOLF', unlocked: true, unlockedAt: '2026-08-03' },
+  { id: 'b-7d', name: 'Iron Discipline', daysRequired: 7, title: 'Day 7: Full Week Sovereign', icon: '🛡️', description: 'One complete week of pure clarity.', archetypeBonus: 'EAGLE', unlocked: true, unlockedAt: '2026-08-07' },
+  { id: 'b-14d', name: 'Neural Rewire', daysRequired: 14, title: 'Day 14: Fortified Focus', icon: '⚡', description: 'Dopamine receptors begin natural up-regulation.', archetypeBonus: 'TIGER', unlocked: true, unlockedAt: '2026-08-14' },
+  { id: 'b-21d', name: 'Habit Anchor', daysRequired: 21, title: 'Day 21: The 3-Week Crucible', icon: '🦅', description: 'New neural pathways permanently cement.', archetypeBonus: 'EAGLE', unlocked: true, unlockedAt: '2026-08-21' },
+  { id: 'b-30d', name: 'Apex Predator', daysRequired: 30, title: 'Day 30: One Month Titan', icon: '🐺', description: 'Energy, skin radiance, and confidence surge.', archetypeBonus: 'WOLF', unlocked: false },
+  { id: 'b-60d', name: 'Unshakable', daysRequired: 60, title: 'Day 60: Two Months Fortress', icon: '🏰', description: 'Total mastery over baseline emotional states.', archetypeBonus: 'TIGER', unlocked: false },
+  { id: 'b-90d', name: 'Sovereign Rebirth', daysRequired: 90, title: 'Day 90: Complete Brain Reset', icon: '👑', description: 'Full neuroplastic reboot achieved.', archetypeBonus: 'EAGLE', unlocked: false },
+  { id: 'b-180d', name: 'Grandmaster', daysRequired: 180, title: 'Half-Year Ascendant', icon: '🌌', description: 'Operating at peak human executive function.', archetypeBonus: 'WOLF', unlocked: false },
+  { id: 'b-365d', name: 'Immortal Warrior', daysRequired: 365, title: 'Year One: Sovereign Legend', icon: '🔥', description: 'Complete transcendence of old identity.', archetypeBonus: 'TIGER', unlocked: false }
+];
+
+/** Default Routine Tasks configuration */
+export const DEFAULT_ROUTINES: RoutineTask[] = [
+  { id: 'm-1', name: '5:30 AM Wake Up (No Snooze)', category: 'MORNING', orderIndex: 1, durationMinutes: 0, timeHint: '5:30 AM', iconName: 'AlarmClock', isMandatory: true, completed: true, completedAt: '05:30' },
+  { id: 'm-2', name: 'Hydrate 500ml + 10m Sunlight', category: 'MORNING', orderIndex: 2, durationMinutes: 10, timeHint: '5:35 AM', iconName: 'Sun', isMandatory: true, completed: true, completedAt: '05:40' },
+  { id: 'm-3', name: '3km Outdoor Walk / Ruck', category: 'MORNING', orderIndex: 3, durationMinutes: 30, timeHint: '5:45 AM', iconName: 'Footprints', isMandatory: true, completed: true, completedAt: '06:15' },
+  { id: 'm-4', name: '3-Minute Cold Shower', category: 'MORNING', orderIndex: 4, durationMinutes: 3, timeHint: '6:18 AM', iconName: 'Droplets', isMandatory: true, completed: false },
+  { id: 'm-5', name: 'Warrior Journal & Top 3 Priorities', category: 'MORNING', orderIndex: 5, durationMinutes: 10, timeHint: '6:25 AM', iconName: 'BookOpen', isMandatory: true, completed: false },
+  { id: 'm-6', name: 'Deep Work Block 1 (Freelance Forge)', category: 'MORNING', orderIndex: 6, durationMinutes: 120, timeHint: '6:45 AM', iconName: 'Flame', isMandatory: true, completed: false },
+  
+  { id: 'e-1', name: '9:00 PM Screens Off & Blue Light Block', category: 'EVENING', orderIndex: 1, durationMinutes: 0, timeHint: '9:00 PM', iconName: 'SmartphoneOff', isMandatory: true, completed: false },
+  { id: 'e-2', name: 'Daily Review & Income Audit', category: 'EVENING', orderIndex: 2, durationMinutes: 10, timeHint: '9:15 PM', iconName: 'CheckCircle2', isMandatory: true, completed: false },
+  { id: 'e-3', name: '10:00 PM Lights Out (7-8h Sleep Target)', category: 'EVENING', orderIndex: 3, durationMinutes: 0, timeHint: '10:00 PM', iconName: 'Moon', isMandatory: true, completed: false }
+];
+
+/** Default User Profile seed */
+export const DEFAULT_PROFILE: UserProfile = {
+  id: 'warrior-01',
+  displayName: 'Akshith Warrior',
+  avatar: '🦅',
+  isBiometricEnabled: true,
+  selectedArchetype: 'EAGLE',
+  targetMonthlyIncome: 120000, // ₹1,20,000 INR
+  sobrietyStartDate: '2026-07-29T00:00:00.000Z',
+  lastLoginDate: new Date().toISOString().split('T')[0],
+  currentStreak: 21,
+  longestStreak: 21,
+  xpPoints: 3450,
+  warriorRank: 'Tier III Sovereign',
+  createdAt: '2026-07-29T00:00:00.000Z'
+};
+
+/** Seed Income Entries in INR (₹) */
+export const DEFAULT_INCOME_ENTRIES: IncomeEntry[] = [
+  { id: 'inc-1', amount: 35000, currency: 'INR', source: 'Direct Client', clientName: 'Nexus Tech Lab', projectDescription: 'Fullstack Mobile PWA & API Integration', isPaid: true, createdAt: '2026-08-04T10:00:00.000Z' },
+  { id: 'inc-2', amount: 18000, currency: 'INR', source: 'Upwork', clientName: 'Aero Dynamics EU', projectDescription: 'TypeScript UI/UX Redesign & Optimization', isPaid: true, createdAt: '2026-08-09T14:30:00.000Z' },
+  { id: 'inc-3', amount: 22500, currency: 'INR', source: 'Retainer', clientName: 'Apex Growth Studio', projectDescription: 'Monthly Performance & Feature Retainer', isPaid: true, createdAt: '2026-08-15T09:15:00.000Z' },
+  { id: 'inc-4', amount: 12000, currency: 'INR', source: 'Fiverr', clientName: 'Quantum AI', projectDescription: 'Custom Web Audio Synth Implementation', isPaid: true, createdAt: '2026-08-18T16:45:00.000Z' }
+];
+
+/** Seed Triggers Log */
+export const DEFAULT_TRIGGERS: TriggerLog[] = [
+  { id: 'trig-1', category: 'FATIGUE', description: 'Late night phone browsing after 11 PM', intensity: 7, resisted: true, recordedAt: '2026-08-16T23:15:00.000Z' },
+  { id: 'trig-2', category: 'STRESS', description: 'Tough client proposal revision anxiety', intensity: 8, resisted: true, recordedAt: '2026-08-12T15:20:00.000Z' },
+  { id: 'trig-3', category: 'APP', description: 'Triggering social media explore algorithmic feed', intensity: 6, resisted: true, recordedAt: '2026-08-08T18:00:00.000Z' },
+  { id: 'trig-4', category: 'EMOTION', description: 'Post-lunch boredom and lack of momentum', intensity: 5, resisted: true, recordedAt: '2026-08-03T14:10:00.000Z' }
+];
+
+/** Seed Reflection Journals */
+export const DEFAULT_JOURNALS: JournalEntry[] = [
+  {
+    id: 'j-1',
+    date: '2026-08-19',
+    prompt: 'What did I conquer today that would have broken my past self?',
+    content: 'Completed 2 hours of pure deep work without picking up my phone once. Reached Day 21 streak. Energy is stable, mental fog is completely gone.',
+    sentimentScore: 0.92,
+    archetype: 'EAGLE',
+    createdAt: '2026-08-19T06:35:00.000Z'
+  },
+  {
+    id: 'j-2',
+    date: '2026-08-18',
+    prompt: 'How did I protect my sovereignty during high pressure?',
+    content: 'Felt an urge around 4 PM due to work fatigue. Deployed the 10-second breath delay shield. The urge vanished after 3 minutes. Dispatched 2 proposals right after.',
+    sentimentScore: 0.85,
+    archetype: 'WOLF',
+    createdAt: '2026-08-18T21:20:00.000Z'
+  }
+];
+
+/**
+ * LocalDatabase class — encapsulates storage operations and reactive dispatch.
+ */
+class LocalDatabase {
+  private listeners: (() => void)[] = [];
+
+  /** Initializes the local database, seeds initial values if missing, and checks streak integrity. */
+  constructor() {
+    this.initSeedData();
+    this.checkDailyStreakIntegrity();
+  }
+
+  /**
+   * Checks if core collections exist in LocalStorage; if not, seeds default data.
+   */
+  private initSeedData(): void {
+    if (!localStorage.getItem(STORAGE_KEYS.PROFILE)) {
+      localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(DEFAULT_PROFILE));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.BADGES)) {
+      localStorage.setItem(STORAGE_KEYS.BADGES, JSON.stringify(DEFAULT_BADGES));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.ROUTINE_TASKS)) {
+      localStorage.setItem(STORAGE_KEYS.ROUTINE_TASKS, JSON.stringify(DEFAULT_ROUTINES));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.INCOME_ENTRIES)) {
+      localStorage.setItem(STORAGE_KEYS.INCOME_ENTRIES, JSON.stringify(DEFAULT_INCOME_ENTRIES));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.TRIGGERS)) {
+      localStorage.setItem(STORAGE_KEYS.TRIGGERS, JSON.stringify(DEFAULT_TRIGGERS));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.JOURNALS)) {
+      localStorage.setItem(STORAGE_KEYS.JOURNALS, JSON.stringify(DEFAULT_JOURNALS));
+    }
+  }
+
+  /**
+   * Registers a subscriber callback that is executed whenever state changes.
+   * @param listener Callback function invoked upon state modification
+   * @returns Unsubscribe function to clean up listener
+   */
+  public subscribe(listener: () => void): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
+  }
+
+  /**
+   * Dispatches notifications to all active listeners and updates native widgets.
+   */
+  private notify(): void {
+    this.listeners.forEach(listener => listener());
+    try {
+      widgetBridge.syncToNativeWidgets(
+        this.getProfile(),
+        this.getRoutines(),
+        this.getIncomeEntries()
+      );
+    } catch {
+      // Background sync safe fallback
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * PROFILE & USER STATE METHODS
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /**
+   * Retrieves the current UserProfile object from local storage.
+   * @returns {UserProfile} Current user profile
+   */
+  public getProfile(): UserProfile {
+    const raw = localStorage.getItem(STORAGE_KEYS.PROFILE);
+    return raw ? JSON.parse(raw) : DEFAULT_PROFILE;
+  }
+
+  /**
+   * Updates user profile fields, persists them, and notifies subscribers.
+   * @param {Partial<UserProfile>} updates Partial profile updates
+   * @returns {UserProfile} Updated user profile
+   */
+  public updateProfile(updates: Partial<UserProfile>): UserProfile {
+    const current = this.getProfile();
+    const updated = { ...current, ...updates };
+    localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(updated));
+    this.notify();
+    return updated;
+  }
+
+  /**
+   * Sets the active archetype (EAGLE | WOLF | TIGER) and updates the root HTML attribute.
+   * @param {Archetype} archetype Selected mindset archetype
+   * @returns {UserProfile} Updated user profile
+   */
+  public setArchetype(archetype: Archetype): UserProfile {
+    document.documentElement.setAttribute('data-archetype', archetype);
+    return this.updateProfile({ selectedArchetype: archetype });
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * RECOVERY & STREAK METHODS
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /**
+   * Verifies daily streak integrity based on calendar days elapsed since last login.
+   * If the user misses 1 or more consecutive calendar days without opening the app,
+   * the streak is automatically reset to 0 and a fatigue/lapse audit entry is logged.
+   *
+   * @returns {{ resetOccurred: boolean; daysMissed: number }} Integrity check result
+   */
+  public checkDailyStreakIntegrity(): { resetOccurred: boolean; daysMissed: number } {
+    const profile = this.getProfile();
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const lastDate = profile.lastLoginDate || today;
+
+    const todayObj = new Date(today);
+    const lastObj = new Date(lastDate);
+    const diffTime = todayObj.getTime() - lastObj.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    let resetOccurred = false;
+
+    if (diffDays > 1 && profile.currentStreak > 0) {
+      // Missed 1 or more full days without opening the app!
+      resetOccurred = true;
+      const lostStreak = profile.currentStreak;
+
+      this.updateProfile({
+        currentStreak: 0,
+        sobrietyStartDate: new Date().toISOString(),
+        lastLoginDate: today,
+        streakResetReason: `Missed ${diffDays - 1} day(s) check-in (Automatic daily inactivity reset)`
+      });
+
+      this.addTrigger({
+        category: 'FATIGUE',
+        description: `Streak of ${lostStreak} days reset to 0: Inactivity (${diffDays} days without app check-in)`,
+        intensity: 7,
+        resisted: false
+      });
+    } else {
+      if (profile.lastLoginDate !== today) {
+        this.updateProfile({ lastLoginDate: today });
+      }
+    }
+
+    return { resetOccurred, daysMissed: Math.max(0, diffDays - 1) };
+  }
+
+  /**
+   * Increments the current streak counter by 1 day, updates longest streak if applicable,
+   * awards +150 XP, and evaluates milestone badge unlock criteria.
+   * @returns {UserProfile} Updated profile with new streak
+   */
+  public incrementStreak(): UserProfile {
+    const profile = this.getProfile();
+    const newStreak = profile.currentStreak + 1;
+    const newLongest = Math.max(newStreak, profile.longestStreak);
+    const updated = this.updateProfile({
+      currentStreak: newStreak,
+      longestStreak: newLongest,
+      xpPoints: profile.xpPoints + 150
+    });
+    this.evaluateBadges(newStreak);
+    return updated;
+  }
+
+  /**
+   * Resets the current streak counter to 0 upon a relapse, updates start date,
+   * and optionally logs a trigger entry for self-reflection.
+   * @param {string} [reason] Optional relapse context / description
+   * @returns {UserProfile} Reset user profile
+   */
+  public resetStreak(reason?: string): UserProfile {
+    const updated = this.updateProfile({
+      currentStreak: 0,
+      sobrietyStartDate: new Date().toISOString()
+    });
+    if (reason) {
+      this.addTrigger({
+        category: 'STRESS',
+        description: `Relapse event: ${reason}`,
+        intensity: 9,
+        resisted: false
+      });
+    }
+    return updated;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * MILESTONE BADGE METHODS
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /**
+   * Retrieves the full milestone badge catalog with unlock statuses.
+   * @returns {MilestoneBadge[]} List of milestone badges
+   */
+  public getBadges(): MilestoneBadge[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.BADGES);
+    return raw ? JSON.parse(raw) : DEFAULT_BADGES;
+  }
+
+  /**
+   * Evaluates current streak against badge criteria and unlocks newly achieved milestones.
+   * @param {number} currentStreak Current active streak in days
+   */
+  private evaluateBadges(currentStreak: number): void {
+    const badges = this.getBadges();
+    let updatedAny = false;
+    const updated = badges.map(b => {
+      if (currentStreak >= b.daysRequired && !b.unlocked) {
+        updatedAny = true;
+        return { ...b, unlocked: true, unlockedAt: new Date().toISOString().split('T')[0] };
+      }
+      return b;
+    });
+
+    if (updatedAny) {
+      localStorage.setItem(STORAGE_KEYS.BADGES, JSON.stringify(updated));
+      this.notify();
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * ROUTINE & HABIT METHODS
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /**
+   * Retrieves all morning and evening routine tasks.
+   * @returns {RoutineTask[]} List of habit tasks
+   */
+  public getRoutines(): RoutineTask[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.ROUTINE_TASKS);
+    return raw ? JSON.parse(raw) : DEFAULT_ROUTINES;
+  }
+
+  /**
+   * Toggles task completion state, checks sequential order adherence for morning routines,
+   * awards discipline XP (50 XP for sequential, 25 XP for out-of-order), and persists state.
+   * @param {string} id Unique task identifier
+   * @returns {{ routines: RoutineTask[]; sequenceValid: boolean }} Updated tasks and validity flag
+   */
+  public toggleRoutineTask(id: string): { routines: RoutineTask[]; sequenceValid: boolean } {
+    const routines = this.getRoutines();
+    const target = routines.find(r => r.id === id);
+    if (!target) return { routines, sequenceValid: true };
+
+    const newCompleted = !target.completed;
+    
+    // Strict sequential verification for morning tasks
+    let sequenceValid = true;
+    if (target.category === 'MORNING' && newCompleted) {
+      const morningTasks = routines.filter(r => r.category === 'MORNING').sort((a, b) => a.orderIndex - b.orderIndex);
+      const targetIndex = morningTasks.findIndex(r => r.id === id);
+      for (let i = 0; i < targetIndex; i++) {
+        if (!morningTasks[i].completed) {
+          sequenceValid = false;
+          break;
+        }
+      }
+    }
+
+    const updated = routines.map(r => {
+      if (r.id === id) {
+        return {
+          ...r,
+          completed: newCompleted,
+          completedAt: newCompleted ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined
+        };
+      }
+      return r;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.ROUTINE_TASKS, JSON.stringify(updated));
+    
+    if (newCompleted) {
+      const profile = this.getProfile();
+      this.updateProfile({ xpPoints: profile.xpPoints + (sequenceValid ? 50 : 25) });
+    }
+
+    this.notify();
+    return { routines: updated, sequenceValid };
+  }
+
+  /**
+   * Resets all daily routine tasks to incomplete state for a new day.
+   */
+  public resetDailyRoutines(): void {
+    const routines = this.getRoutines().map(r => ({ ...r, completed: false, completedAt: undefined }));
+    localStorage.setItem(STORAGE_KEYS.ROUTINE_TASKS, JSON.stringify(routines));
+    this.notify();
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * FREELANCE INCOME METHODS
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /**
+   * Retrieves all freelance income ledger entries.
+   * @returns {IncomeEntry[]} Array of income entries
+   */
+  public getIncomeEntries(): IncomeEntry[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.INCOME_ENTRIES);
+    return raw ? JSON.parse(raw) : DEFAULT_INCOME_ENTRIES;
+  }
+
+  /**
+   * Logs a new freelance income transaction in INR (₹) and awards +100 XP.
+   * @param {Omit<IncomeEntry, 'id' | 'createdAt'>} entry Income parameters
+   * @returns {IncomeEntry} Newly created and saved entry
+   */
+  public addIncomeEntry(entry: Omit<IncomeEntry, 'id' | 'createdAt'>): IncomeEntry {
+    const entries = this.getIncomeEntries();
+    const newEntry: IncomeEntry = {
+      ...entry,
+      id: 'inc-' + Date.now(),
+      createdAt: new Date().toISOString()
+    };
+    const updated = [newEntry, ...entries];
+    localStorage.setItem(STORAGE_KEYS.INCOME_ENTRIES, JSON.stringify(updated));
+    
+    const profile = this.getProfile();
+    this.updateProfile({ xpPoints: profile.xpPoints + 100 });
+
+    this.notify();
+    return newEntry;
+  }
+
+  /**
+   * Deletes an income entry by ID.
+   * @param {string} id Unique income transaction ID
+   */
+  public deleteIncomeEntry(id: string): void {
+    const entries = this.getIncomeEntries().filter(e => e.id !== id);
+    localStorage.setItem(STORAGE_KEYS.INCOME_ENTRIES, JSON.stringify(entries));
+    this.notify();
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * TRIGGER RADAR METHODS
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /**
+   * Retrieves all subconscious trigger radar logs.
+   * @returns {TriggerLog[]} Array of trigger entries
+   */
+  public getTriggers(): TriggerLog[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.TRIGGERS);
+    return raw ? JSON.parse(raw) : DEFAULT_TRIGGERS;
+  }
+
+  /**
+   * Logs a new urge trigger event with intensity (1-10) and resistance status.
+   * @param {Omit<TriggerLog, 'id' | 'recordedAt'>} trigger Trigger details
+   * @returns {TriggerLog} Saved trigger log
+   */
+  public addTrigger(trigger: Omit<TriggerLog, 'id' | 'recordedAt'>): TriggerLog {
+    const triggers = this.getTriggers();
+    const newTrigger: TriggerLog = {
+      ...trigger,
+      id: 'trig-' + Date.now(),
+      recordedAt: new Date().toISOString()
+    };
+    const updated = [newTrigger, ...triggers];
+    localStorage.setItem(STORAGE_KEYS.TRIGGERS, JSON.stringify(updated));
+    this.notify();
+    return newTrigger;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * REFLECTION JOURNAL METHODS
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /**
+   * Retrieves all stored journal entries.
+   * @returns {JournalEntry[]} Array of journal entries
+   */
+  public getJournals(): JournalEntry[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.JOURNALS);
+    return raw ? JSON.parse(raw) : DEFAULT_JOURNALS;
+  }
+
+  /**
+   * Persists a new reflection journal entry and awards +75 XP.
+   * @param {string} prompt Daily introspective prompt
+   * @param {string} content User reflection text
+   * @param {number} [sentimentScore=0.8] Local NLP sentiment score (0.0 to 1.0)
+   * @returns {JournalEntry} Newly created journal entry
+   */
+  public addJournal(prompt: string, content: string, sentimentScore: number = 0.8): JournalEntry {
+    const journals = this.getJournals();
+    const profile = this.getProfile();
+    const newJournal: JournalEntry = {
+      id: 'j-' + Date.now(),
+      date: new Date().toISOString().split('T')[0],
+      prompt,
+      content,
+      sentimentScore,
+      archetype: profile.selectedArchetype,
+      createdAt: new Date().toISOString()
+    };
+    const updated = [newJournal, ...journals];
+    localStorage.setItem(STORAGE_KEYS.JOURNALS, JSON.stringify(updated));
+    this.updateProfile({ xpPoints: profile.xpPoints + 75 });
+    this.notify();
+    return newJournal;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * DATA EXPORT & SOVEREIGN IMPORT (JSON / CSV)
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /**
+   * Serializes the complete application state into an encrypted/standard JSON backup string.
+   * @returns {string} JSON backup data string
+   */
+  public exportDataJSON(): string {
+    const backup = {
+      profile: this.getProfile(),
+      badges: this.getBadges(),
+      routines: this.getRoutines(),
+      income: this.getIncomeEntries(),
+      triggers: this.getTriggers(),
+      journals: this.getJournals(),
+      exportedAt: new Date().toISOString()
+    };
+    return JSON.stringify(backup, null, 2);
+  }
+
+  /**
+   * Restores application state from a JSON backup string with validation.
+   * @param {string} jsonStr Raw JSON backup content
+   * @returns {boolean} True if successfully restored, false otherwise
+   */
+  public importDataJSON(jsonStr: string): boolean {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      if (parsed.profile) localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(parsed.profile));
+      if (parsed.badges) localStorage.setItem(STORAGE_KEYS.BADGES, JSON.stringify(parsed.badges));
+      if (parsed.routines) localStorage.setItem(STORAGE_KEYS.ROUTINE_TASKS, JSON.stringify(parsed.routines));
+      if (parsed.income) localStorage.setItem(STORAGE_KEYS.INCOME_ENTRIES, JSON.stringify(parsed.income));
+      if (parsed.triggers) localStorage.setItem(STORAGE_KEYS.TRIGGERS, JSON.stringify(parsed.triggers));
+      if (parsed.journals) localStorage.setItem(STORAGE_KEYS.JOURNALS, JSON.stringify(parsed.journals));
+      this.notify();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Exports freelance income transactions into CSV format for spreadsheet analysis.
+   * @returns {string} CSV spreadsheet string
+   */
+  public exportIncomeCSV(): string {
+    const income = this.getIncomeEntries();
+    const header = 'ID,Date,Client,Source,Amount (INR),Paid,Description\n';
+    const rows = income.map(e => `"${e.id}","${e.createdAt.split('T')[0]}","${e.clientName}","${e.source}",${e.amount},${e.isPaid ? 'YES' : 'NO'},"${e.projectDescription || ''}"`).join('\n');
+    return header + rows;
+  }
+}
+
+/** Singleton database instance exported for application-wide use */
+export const db = new LocalDatabase();

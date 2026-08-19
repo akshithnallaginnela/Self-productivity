@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_forge_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/widget_bg_secondary">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="FORGE ₹"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="#00658F" />
+
+        <TextView
+            android:id="@+id/widget_forge_percent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="73% Pace"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="#00658F" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Aug Realized"
+            android:textSize="10sp"
+            android:textColor="#4E616D" />
+
+        <TextView
+            android:id="@+id/widget_forge_amount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="₹87,500"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#1D1B20"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Goal: ₹1,20,000"
+        android:textSize="9sp"
+        android:textColor="#4E616D" />
+</LinearLayout>

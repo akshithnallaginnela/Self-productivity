@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_streak_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/widget_bg_amber">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🦅"
+            android:textSize="22sp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SOBRIETY SHIELD"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:textColor="#705B40" />
+
+            <TextView
+                android:id="@+id/widget_warrior_rank"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tier III Sovereign"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#1D1B20" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_btn_sos"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🚨 SOS"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#B3261E"
+            android:background="#F9DEDC"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="4dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="bottom">
+
+                <TextView
+                    android:id="@+id/widget_streak_days"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="21"
+                    android:textSize="40sp"
+                    android:textStyle="bold"
+                    android:textColor="#1D1B20"
+                    android:includeFontPadding="false" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=" DAYS SOBER"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:textColor="#705B40"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginBottom="4dp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_streak_subtext"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Longest: 21d · +3450 XP"
+                android:textSize="11sp"
+                android:textColor="#49454F"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔥"
+            android:textSize="32sp" />
+    </LinearLayout>
+</LinearLayout>

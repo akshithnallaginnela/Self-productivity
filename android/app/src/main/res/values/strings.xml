@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Recovery Warrior</string>
+    <string name="title_activity_main">Recovery Warrior</string>
+    <string name="package_name">com.recoverywarrior.app</string>
+    <string name="custom_url_scheme">com.recoverywarrior.app</string>
+</resources>

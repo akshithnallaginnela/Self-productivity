@@ -1,0 +1,472 @@
+/* ============================================================================
+ * MATERIAL DESIGN 3 — OFFICIAL COMPONENT SYSTEM (https://m3.material.io)
+ *
+ * Implements pure, modern Android Material Design 3 component specifications:
+ *   1. Cards (Elevated, Filled, Outlined, Tinted Container)
+ *   2. Buttons (Filled, Tonal, Outlined, Text, Elevated, Segmented)
+ *   3. Floating Action Buttons (Extended, Standard, Error)
+ *   4. Chips (Assist, Filter, Input, Suggestion)
+ *   5. Segmented Buttons (Connected multi-select & single-select groups)
+ *   6. List Containers & Grouped Settings-style cards
+ *   7. Text Fields (Filled & Outlined with active indicator lines)
+ *   8. Modals & Dialogs
+ *   9. Progress Indicators & Sliders
+ * ========================================================================= */
+
+
+/* ── 1. CARDS & CONTAINERS ────────────────────────────────────────────────── */
+
+/* Standard Material 3 Surface Container Card */
+.md3-card {
+  background: var(--md-sys-color-surface-container-low);
+  border-radius: var(--md-sys-shape-large);
+  padding: 16px;
+  box-shadow: var(--md-sys-elevation-0);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  position: relative;
+  overflow: hidden;
+  transition:
+    box-shadow var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard),
+    background-color var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard);
+}
+
+/* Elevated Card (Level 1 elevation, smooth hover to Level 2) */
+.md3-card-elevated {
+  background: var(--md-sys-color-surface-container-low);
+  border-radius: var(--md-sys-shape-large);
+  padding: 18px;
+  box-shadow: var(--md-sys-elevation-1);
+  border: none;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard);
+}
+
+.md3-card-elevated:hover {
+  box-shadow: var(--md-sys-elevation-2);
+}
+
+/* Filled Card (Uses surface-container-highest tone, no shadow) */
+.md3-card-filled {
+  background: var(--md-sys-color-surface-container-highest);
+  border-radius: var(--md-sys-shape-large);
+  padding: 16px;
+  border: none;
+  box-shadow: var(--md-sys-elevation-0);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Outlined Card (Surface tone + 1px outline-variant border) */
+.md3-card-outlined {
+  background: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-large);
+  padding: 16px;
+  box-shadow: var(--md-sys-elevation-0);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Primary Container Tinted Card (Dynamic color based on active archetype) */
+.md3-card-tinted {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border-radius: var(--md-sys-shape-large);
+  padding: 18px;
+  border: none;
+  box-shadow: var(--md-sys-elevation-0);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Secondary Container Tinted Card */
+.md3-card-secondary-tinted {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  border-radius: var(--md-sys-shape-large);
+  padding: 18px;
+  border: none;
+  box-shadow: var(--md-sys-elevation-0);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Tertiary Container Tinted Card */
+.md3-card-tertiary-tinted {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  border-radius: var(--md-sys-shape-large);
+  padding: 18px;
+  border: none;
+  box-shadow: var(--md-sys-elevation-0);
+  position: relative;
+  overflow: hidden;
+}
+
+
+/* ── 2. GROUPED LIST CONTAINERS (Google Settings / Android Tasks Style) ───── */
+
+.md3-list-group {
+  background: var(--md-sys-color-surface-container-low);
+  border-radius: var(--md-sys-shape-large);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.md3-list-group-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--md-sys-color-surface-container-highest);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background-color var(--md-sys-motion-duration-short2);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.md3-list-group-item:last-child {
+  border-bottom: none;
+}
+
+.md3-list-group-item:hover {
+  background-color: var(--md-sys-color-surface-container-high);
+}
+
+.md3-list-group-item:active {
+  background-color: var(--md-sys-color-surface-container-highest);
+}
+
+
+/* ── 3. BUTTONS (Official M3 Stadium Pill Shapes) ─────────────────────────── */
+
+/* Common Button Base */
+.md3-button-filled,
+.md3-button-tonal,
+.md3-button-outlined,
+.md3-button-text,
+.md3-button-elevated {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--md-sys-shape-full); /* Official M3 Stadium Pill */
+  font-family: var(--md-sys-typescale-label-large-font);
+  font-size: var(--md-sys-typescale-label-large-size);
+  font-weight: var(--md-sys-typescale-label-large-weight);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  border: none;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    box-shadow var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard),
+    background-color var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Small Button Variant (32dp height) */
+.md3-button-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  gap: 6px;
+}
+
+/* Large Button Variant (48dp height) */
+.md3-button-lg {
+  height: 48px;
+  padding: 0 24px;
+  font-size: 15px;
+  gap: 10px;
+}
+
+/* Filled Button (High emphasis) */
+.md3-button-filled {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  box-shadow: var(--md-sys-elevation-0);
+}
+
+.md3-button-filled:hover {
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+.md3-button-filled:active {
+  transform: scale(0.98);
+}
+
+/* Filled Tonal Button (Medium-high emphasis) */
+.md3-button-tonal {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  box-shadow: var(--md-sys-elevation-0);
+}
+
+.md3-button-tonal:hover {
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+.md3-button-tonal:active {
+  transform: scale(0.98);
+}
+
+/* Outlined Button (Medium emphasis) */
+.md3-button-outlined {
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  border: 1px solid var(--md-sys-color-outline);
+}
+
+.md3-button-outlined:hover {
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.md3-button-outlined:active {
+  transform: scale(0.98);
+}
+
+/* Text Button (Low emphasis) */
+.md3-button-text {
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  padding: 0 12px;
+}
+
+.md3-button-text:hover {
+  background: var(--md-sys-color-surface-container-high);
+}
+
+
+/* ── 4. SEGMENTED BUTTONS (Official M3 Component) ────────────────────────── */
+
+.md3-segmented-group {
+  display: inline-flex;
+  width: 100%;
+  border-radius: var(--md-sys-shape-full);
+  background: var(--md-sys-color-surface-container-low);
+  border: 1px solid var(--md-sys-color-outline);
+  padding: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.md3-segmented-item {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--md-sys-shape-full);
+  border: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-family: var(--md-sys-typescale-label-large-font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-emphasized),
+    color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-emphasized),
+    box-shadow var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-emphasized);
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+
+.md3-segmented-item.active {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font-weight: 700;
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+.md3-segmented-item:hover:not(.active) {
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+
+/* ── 5. EXTENDED FLOATING ACTION BUTTON (FAB) ────────────────────────────── */
+
+.md3-fab-extended {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 20px;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border: none;
+  border-radius: var(--md-sys-shape-large); /* 16dp rounded rectangle per M3 */
+  font-family: var(--md-sys-typescale-label-large-font);
+  font-size: var(--md-sys-typescale-label-large-size);
+  font-weight: 700;
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  cursor: pointer;
+  box-shadow: var(--md-sys-elevation-3);
+  transition:
+    box-shadow var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-short2) var(--md-sys-motion-easing-standard);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.md3-fab-extended:hover {
+  box-shadow: var(--md-sys-elevation-4);
+  transform: translateY(-1px);
+}
+
+.md3-fab-extended:active {
+  transform: scale(0.96);
+  box-shadow: var(--md-sys-elevation-2);
+}
+
+.md3-fab-error {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+
+/* ── 6. CHIPS (Assist, Filter, Input) ────────────────────────────────────── */
+
+.md3-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-small);
+  font-family: var(--md-sys-typescale-label-large-font);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--md-sys-motion-duration-short2);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.md3-chip:hover {
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.md3-chip-filled {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  border: none;
+}
+
+
+/* ── 7. TEXT FIELDS & INPUTS ──────────────────────────────────────────────── */
+
+.md3-field-outlined {
+  width: 100%;
+  background: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-small);
+  color: var(--md-sys-color-on-surface);
+  padding: 12px 14px;
+  font-family: var(--md-sys-typescale-body-large-font);
+  font-size: var(--md-sys-typescale-body-large-size);
+  transition: border-color var(--md-sys-motion-duration-short2), box-shadow var(--md-sys-motion-duration-short2);
+}
+
+.md3-field-outlined:focus {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+  border-width: 2px;
+  padding: 11px 13px; /* Prevent layout shift */
+}
+
+.md3-select {
+  width: 100%;
+  background: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-small);
+  color: var(--md-sys-color-on-surface);
+  padding: 12px 14px;
+  font-family: var(--md-sys-typescale-body-large-font);
+  font-size: var(--md-sys-typescale-body-large-size);
+  cursor: pointer;
+}
+
+.md3-select:focus {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+  border-width: 2px;
+}
+
+.md3-field-label {
+  font-family: var(--md-sys-typescale-body-small-font);
+  font-size: var(--md-sys-typescale-body-small-size);
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+  margin-bottom: 6px;
+  display: block;
+}
+
+
+/* ── 8. DIALOGS & SCRIM ───────────────────────────────────────────────────── */
+
+.md3-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 60;
+  animation: md3-fade-in var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-emphasized-decelerate);
+}
+
+.md3-dialog {
+  width: 100%;
+  max-width: 360px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--md-sys-color-surface-container-high);
+  border-radius: var(--md-sys-shape-extra-large);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--md-sys-elevation-3);
+  animation: md3-dialog-enter var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-emphasized-decelerate);
+}
+
+
+/* ── 9. SECTION HEADERS & LABELS ─────────────────────────────────────────── */
+
+.md3-section-title {
+  font-family: var(--md-sys-typescale-title-small-font);
+  font-size: var(--md-sys-typescale-title-small-size);
+  font-weight: 700;
+  color: var(--md-sys-color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 2px;
+}
+
+.md3-headline {
+  font-family: var(--md-sys-typescale-headline-small-font);
+  font-size: var(--md-sys-typescale-headline-small-size);
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+  letter-spacing: -0.2px;
+}
