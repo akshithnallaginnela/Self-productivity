@@ -10,6 +10,8 @@ export interface UserProfile {
   targetMonthlyIncome: number; // in INR (₹)
   sobrietyStartDate: string; // ISO string
   lastLoginDate: string; // YYYY-MM-DD
+  lastStreakExtendedDate?: string; // YYYY-MM-DD (Date when streak was earned for the day)
+  tasksCompletedToday?: number; // Count of tasks completed today
   currentStreak: number;
   longestStreak: number;
   xpPoints: number;
