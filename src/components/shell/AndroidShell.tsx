@@ -133,7 +133,7 @@ export const AndroidShell: React.FC<AndroidShellProps> = ({
         </main>
 
         {/* ── Extended Crisis FAB (above nav bar) ────────────────────── */}
-        {activeTab !== 'widgets' && (
+        {activeTab !== 'widgets' && activeTab !== 'start' && (
           <div className="crisis-fab">
             <button
               className="md3-fab-extended md3-fab-error"
@@ -146,11 +146,13 @@ export const AndroidShell: React.FC<AndroidShellProps> = ({
           </div>
         )}
 
-        {/* ── M3 Navigation Bar (80dp) ───────────────────────────────── */}
-        <NavigationBar
-          activeTab={activeTab === 'widgets' ? 'recovery' : activeTab}
-          onTabChange={handleTabChange}
-        />
+        {/* ── Floating Navigation Dock (hidden during start onboarding) ── */}
+        {activeTab !== 'start' && (
+          <NavigationBar
+            activeTab={activeTab === 'widgets' ? 'recovery' : activeTab}
+            onTabChange={handleTabChange}
+          />
+        )}
 
         {/* ── Gesture Navigation Handle (transparent) ────────────────── */}
         <GestureBar />

@@ -21,12 +21,14 @@ interface ProfileModalProps {
   isOpen: boolean;
   /** Callback fired to close the modal */
   onClose: () => void;
+  /** Callback to re-open the Start / Setup screen */
+  onOpenStart?: () => void;
 }
 
 /**
  * Renders the Material Design 3 profile configuration dialog.
  */
-export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
+export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onOpenStart }) => {
   const profile = db.getProfile();
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [targetIncome, setTargetIncome] = useState(profile.targetMonthlyIncome.toString());
@@ -110,7 +112,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               className="md3-field-outlined"
               value={targetIncome}
               onChange={(e) => setTargetIncome(e.target.value)}
-              placeholder="e.g. 120000"
+              placeholder="e.g. 150000"
               style={{ fontWeight: 700 }}
             />
           </div>
@@ -153,11 +155,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             />
           </div>
 
-          {/* Action Button */}
-          <button type="submit" className="md3-button-filled" style={{ marginTop: '8px' }}>
-            <CheckCircle2 size={16} />
-            {saved ? 'Profile Settings Saved ✓' : 'Save Command Settings'}
-          </button>
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+            <button type="submit" className="md3-button-filled">
+              <CheckCircle2 size={16} />
+              {saved ? 'Profile Settings Saved ✓' : 'Save Command Settings'}
+            </button>
+
+            {onOpenStart && (
+              <button
+                type="button"
+                className="md3-button-tonal"
+                onClick={onOpenStart}
+                style={{ fontSize: '12px' }}
+              >
+                🦅 Re-launch Start Screen & Setup
+              </button>
+            )}
+          </div>
         </form>
       </div>
     </div>

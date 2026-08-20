@@ -15,6 +15,7 @@ import React, { useState, useEffect } from 'react';
 import { Wifi, Battery, Signal } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { db } from '../../services/db';
+import { AppLogo } from './AppLogo';
 
 interface StatusBarProps {
   /** Whether the content area has scrolled (triggers frosted glass effect) */
@@ -66,11 +67,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({ isScrolled, onOpenProfile 
       className={`system-status-bar ${isScrolled ? 'scrolled' : ''}`}
       aria-label="Android Status Bar"
     >
-      {/* Left cluster: time + streak badge */}
+      {/* Left cluster: time + AppLogo + streak badge */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
         <span className="status-bar-time" style={{ fontWeight: 700 }}>
           {currentTime}
         </span>
+        <AppLogo size={14} />
 
         {/* Interactive streak badge — tapping opens warrior profile */}
         <button

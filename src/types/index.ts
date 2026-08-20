@@ -6,6 +6,7 @@ export interface UserProfile {
   avatar: string;
   pin?: string;
   isBiometricEnabled: boolean;
+  isOnboardingCompleted?: boolean;
   selectedArchetype: Archetype;
   targetMonthlyIncome: number; // in INR (₹)
   sobrietyStartDate: string; // ISO string
@@ -100,7 +101,7 @@ export interface MilestoneBadge {
   unlockedAt?: string;
 }
 
-export type NavigationTab = 'recovery' | 'routine' | 'income' | 'mindset' | 'analytics' | 'widgets';
+export type NavigationTab = 'recovery' | 'routine' | 'income' | 'mindset' | 'analytics' | 'widgets' | 'start';
 
 export interface SoundscapeTrack {
   id: string;

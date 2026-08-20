@@ -1,9 +1,10 @@
 /**
  * App.tsx — Root Application Component & Navigation State Machine
  *
- * This is the entry point React component for Recovery Warrior.
+ * This is the entry point React component for Recovery Warrior / Sovereign Eagle.
  * It manages:
- *   - Active navigation tab state (recovery | routine | income | mindset | analytics | widgets)
+ *   - Active navigation tab state (start | recovery | routine | income | mindset | analytics | widgets)
+ *   - Launch Onboarding state (routes to StartView if !isOnboardingCompleted or start tab active)
  *   - Crisis modal open/close state
  *   - Profile modal open/close state
  *   - Root archetype theming (sets data-archetype on <html> for CSS token switching)
@@ -16,6 +17,7 @@ import React, { useState, useEffect } from 'react';
 import { NavigationTab } from './types';
 import { db } from './services/db';
 import { AndroidShell } from './components/shell/AndroidShell';
+import { StartView } from './components/shell/StartView';
 import { RecoveryView } from './components/recovery/RecoveryView';
 import { RoutineView } from './components/routine/RoutineView';
 import { IncomeView } from './components/income/IncomeView';
@@ -27,7 +29,10 @@ import { ProfileModal } from './components/profile/ProfileModal';
 
 export const App: React.FC = () => {
   /** Tracks which tab/view is currently displayed */
-  const [activeTab, setActiveTab] = useState<NavigationTab>('recovery');
+  const [activeTab, setActiveTab] = useState<NavigationTab>(() => {
+    const profile = db.getProfile();
+    return profile.isOnboardingCompleted ? 'recovery' : 'start';
+  });
 
   /** Controls visibility of the 10-second crisis intervention modal */
   const [isCrisisOpen, setIsCrisisOpen] = useState<boolean>(false);
@@ -50,11 +55,11 @@ export const App: React.FC = () => {
 
   /**
    * Routes the activeTab state to the corresponding view component.
-   * Each view is a self-contained feature module that subscribes
-   * to the reactive database for its own data.
    */
   const renderActiveView = (): React.ReactNode => {
     switch (activeTab) {
+      case 'start':
+        return <StartView onComplete={() => setActiveTab('recovery')} />;
       case 'recovery':
         return <RecoveryView onOpenCrisis={() => setIsCrisisOpen(true)} />;
       case 'routine':
@@ -96,6 +101,10 @@ export const App: React.FC = () => {
       <ProfileModal
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
+        onOpenStart={() => {
+          setIsProfileOpen(false);
+          setActiveTab('start');
+        }}
       />
     </AndroidShell>
   );
