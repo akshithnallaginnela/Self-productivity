@@ -7,7 +7,8 @@
  *   3. Dual-tone filter chips bar ([ All | 8 ], [ Morning | 4 ], [ Evening | 4 ], etc.)
  *   4. Reference card anatomy with bold titles, ↗ action buttons, clock time spans,
  *      priority capsule pills, avatar stacks, and striped progress bars.
- *   5. Monitored Focus, GPS Walk, Sleep, and Ritual engines.
+ *   5. Full Habit Manager (Add custom routines, delete, toggle completion, sequential order checks).
+ *   6. Monitored Focus with Screen WakeLock, GPS Walk, Sleep, and Ritual engines.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -32,11 +33,14 @@ import {
   ChevronDown,
   Pencil,
   Bell,
-  Plus
+  Plus,
+  Trash2,
+  X
 } from 'lucide-react';
 import { RoutineTask, FocusSession, UserProfile } from '../../types';
 import { db } from '../../services/db';
 import { audioEngine } from '../../services/audioEngine';
+import { androidSystem } from '../../services/androidSystem';
 import { GpsWalkTracker } from './GpsWalkTracker';
 import { SleepTrackerCard } from './SleepTrackerCard';
 
@@ -49,6 +53,13 @@ export const RoutineView: React.FC = () => {
   const [disciplinesStatus, setDisciplinesStatus] = useState(db.getTodayDisciplinesStatus());
   const [activeFilter, setActiveFilter] = useState<RoutineFilter>('ALL');
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
+
+  /* ── Add Custom Habit Modal state ────────────────────────────────── */
+  const [showAddHabitModal, setShowAddHabitModal] = useState<boolean>(false);
+  const [newHabitName, setNewHabitName] = useState<string>('');
+  const [newHabitCategory, setNewHabitCategory] = useState<'MORNING' | 'EVENING' | 'CUSTOM'>('MORNING');
+  const [newHabitTimeHint, setNewHabitTimeHint] = useState<string>('07:00 AM');
+  const [newHabitDuration, setNewHabitDuration] = useState<number>(15);
 
   /* ── 30-min Monitored Focus Engine state ─────────────────────────── */
   const [focusTargetMinutes, setFocusTargetMinutes] = useState<number>(30);
@@ -69,7 +80,7 @@ export const RoutineView: React.FC = () => {
   }, []);
 
   /**
-   * Monitored Focus timer countdown loop.
+   * Monitored Focus timer countdown loop with Screen WakeLock.
    */
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;
@@ -80,6 +91,7 @@ export const RoutineView: React.FC = () => {
       audioEngine.stop();
       audioEngine.playMilestoneTriumph();
       audioEngine.triggerHaptic('success');
+      androidSystem.releaseWakeLock();
       confetti({
         particleCount: 50,
         spread: 60,
@@ -97,18 +109,22 @@ export const RoutineView: React.FC = () => {
       };
       db.saveFocusSession(session);
     }
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+    };
   }, [isFocusActive, focusSecondsRemaining, focusTargetMinutes]);
 
-  /** Toggles 30m Focus Timer and 40Hz Gamma soundscape. */
+  /** Toggles 30m Focus Timer and 40Hz Gamma soundscape with Screen WakeLock. */
   const handleToggleFocus = () => {
     if (!isFocusActive) {
       setIsFocusActive(true);
       audioEngine.playTrack('track-gamma');
       audioEngine.triggerHaptic('medium');
+      androidSystem.requestWakeLock();
     } else {
       setIsFocusActive(false);
       audioEngine.stop();
+      androidSystem.releaseWakeLock();
     }
   };
 
@@ -116,6 +132,7 @@ export const RoutineView: React.FC = () => {
   const handleResetFocusTimer = (minutes: number) => {
     setIsFocusActive(false);
     audioEngine.stop();
+    androidSystem.releaseWakeLock();
     setFocusTargetMinutes(minutes);
     setFocusSecondsRemaining(minutes * 60);
     audioEngine.triggerHaptic('light');
@@ -135,6 +152,33 @@ export const RoutineView: React.FC = () => {
       setOrderWarning('Discipline Notice: Morning sequence completed out of order! (Reduced XP)');
       setTimeout(() => setOrderWarning(null), 3500);
     }
+  };
+
+  /** Adds a new custom routine task to local DB. */
+  const handleAddHabit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newHabitName.trim()) return;
+
+    db.addRoutineTask({
+      name: newHabitName.trim(),
+      category: newHabitCategory,
+      orderIndex: routines.length + 1,
+      durationMinutes: newHabitDuration,
+      timeHint: newHabitTimeHint,
+      iconName: 'Sparkles',
+      isMandatory: false
+    });
+
+    audioEngine.playTaskCompleteChime();
+    audioEngine.triggerHaptic('success');
+    setNewHabitName('');
+    setShowAddHabitModal(false);
+  };
+
+  /** Deletes a routine task. */
+  const handleDeleteHabit = (id: string) => {
+    db.deleteRoutineTask(id);
+    audioEngine.triggerHaptic('light');
   };
 
   const formatTimer = (seconds: number): string => {
@@ -180,9 +224,9 @@ export const RoutineView: React.FC = () => {
         <div className="ref-header-actions">
           <button
             className="ref-circle-btn ref-circle-btn-dark"
-            onClick={handleToggleFocus}
-            title="Ignite 30m Focus"
-            aria-label="Ignite focus session"
+            onClick={() => setShowAddHabitModal(true)}
+            title="Add Custom Routine"
+            aria-label="Add custom routine"
           >
             <Plus size={18} />
           </button>
@@ -206,7 +250,15 @@ export const RoutineView: React.FC = () => {
       {/* ── Schedule Date Dropdown & Edit Action (Screen 2) ─────────── */}
       <div className="ref-calendar-container">
         <div className="ref-calendar-header">
-          <button className="ref-date-picker-btn" aria-label="Selected date">
+          <button
+            className="ref-date-picker-btn"
+            onClick={() => {
+              setSelectedDay(today.getDate());
+              audioEngine.triggerHaptic('light');
+            }}
+            title="Reset to today"
+            aria-label="Selected date"
+          >
             <CalendarIcon size={16} color="var(--md-sys-color-primary)" />
             <span>{currentDateFormatted}</span>
             <ChevronDown size={14} color="#64748b" />
@@ -214,9 +266,9 @@ export const RoutineView: React.FC = () => {
 
           <button
             className="ref-pencil-btn"
-            onClick={() => setActiveFilter(activeFilter === 'ALL' ? 'FOCUS' : 'ALL')}
-            title="Toggle quick filter"
-            aria-label="Toggle filter"
+            onClick={() => setShowAddHabitModal(true)}
+            title="Add or Customize Routines"
+            aria-label="Add habit"
           >
             <Pencil size={16} />
           </button>
@@ -233,13 +285,16 @@ export const RoutineView: React.FC = () => {
           {daysInMonth.map((day) => {
             const isSelected = selectedDay === day;
             const isToday = today.getDate() === day;
-            const isCompleted = day <= today.getDate() && day % 2 === 0; // Completed streak days
+            const isCompleted = day <= today.getDate() && day % 2 === 0;
 
             return (
               <button
                 key={day}
                 type="button"
-                onClick={() => setSelectedDay(day)}
+                onClick={() => {
+                  setSelectedDay(day);
+                  audioEngine.triggerHaptic('light');
+                }}
                 className={`ref-day-cell ${isSelected ? 'selected' : ''} ${isCompleted && !isSelected ? 'completed' : ''} ${isToday ? 'today' : ''}`}
                 aria-label={`Day ${day}`}
               >
@@ -255,7 +310,7 @@ export const RoutineView: React.FC = () => {
         <button
           className="ref-filter-icon-btn"
           onClick={() => setActiveFilter('ALL')}
-          title="Reset filter"
+          title="Reset filter to all"
           aria-label="Filter"
         >
           <SlidersHorizontal size={16} />
@@ -267,7 +322,7 @@ export const RoutineView: React.FC = () => {
           onClick={() => setActiveFilter('ALL')}
         >
           <span>All Tasks</span>
-          <span className="ref-filter-count">{routines.length + 3}</span>
+          <span className="ref-filter-count">{routines.length}</span>
         </button>
 
         <button
@@ -275,7 +330,7 @@ export const RoutineView: React.FC = () => {
           className={`ref-filter-pill ${activeFilter === 'MORNING' ? 'active' : ''}`}
           onClick={() => setActiveFilter('MORNING')}
         >
-          <span>Morning Rituals</span>
+          <span>Morning</span>
           <span className="ref-filter-count">{morningTasks.length}</span>
         </button>
 
@@ -445,18 +500,22 @@ export const RoutineView: React.FC = () => {
         </div>
       )}
 
-      {/* ── CARD 2: GPS Walk Tracker Card ──────────────────────────── */}
+      {/* ── CARD 2: Outdoor GPS Walk & Step Discipline Card ─────────── */}
       {(activeFilter === 'ALL' || activeFilter === 'WALK') && (
-        <div className="ref-task-card ref-task-card-tinted">
+        <div className="ref-task-card ref-task-card-light">
           <div className="ref-task-card-top">
             <div className="ref-task-card-title">
-              GPS Morning Walk & Movement
+              GPS Outdoor Walk (3k Steps)
             </div>
             <div className="ref-task-card-actions">
               <span className="ref-task-review-badge">
-                {disciplinesStatus.walkDone ? 'Verified ✓' : '3,000 Steps'}
+                {disciplinesStatus.walkDone ? `${disciplinesStatus.walkSteps} Steps ✓` : '3,000 Step Target'}
               </span>
-              <button className="ref-arrow-btn" aria-label="View walk tracker">
+              <button
+                className="ref-arrow-btn"
+                onClick={() => setActiveFilter(activeFilter === 'WALK' ? 'ALL' : 'WALK')}
+                aria-label="View GPS Walk details"
+              >
                 <ArrowUpRight size={18} />
               </button>
             </div>
@@ -467,22 +526,18 @@ export const RoutineView: React.FC = () => {
               <Clock size={14} />
               <span>06.30 AM - 07.30 AM</span>
             </div>
-            <div className="ref-priority-pill">
-              Core Habit
+            <div className="ref-priority-pill" style={{ color: 'var(--md-sys-color-tertiary)', borderColor: 'var(--md-sys-color-tertiary)' }}>
+              Core Discipline
             </div>
           </div>
 
-          {/* Integrated GPS Tracker */}
           <GpsWalkTracker />
 
           <div className="ref-card-tray">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div className="ref-avatar-stack">
-                <div className="ref-avatar-stack-item">🚶</div>
-                <div className="ref-avatar-stack-item">📍</div>
-              </div>
+              <Footprints size={18} color="var(--md-sys-color-primary)" />
               <span style={{ fontSize: '11px', fontWeight: 700 }}>
-                {disciplinesStatus.walkSteps} Steps
+                {disciplinesStatus.walkDone ? 'Discipline Secured' : 'GPS Tracking Ready'}
               </span>
             </div>
 
@@ -510,8 +565,13 @@ export const RoutineView: React.FC = () => {
               <span className="ref-task-review-badge">
                 {morningTasks.filter((t) => t.completed).length}/{morningTasks.length} Steps
               </span>
-              <button className="ref-arrow-btn" aria-label="Morning sequence">
-                <ArrowUpRight size={18} />
+              <button
+                className="ref-arrow-btn"
+                onClick={() => setShowAddHabitModal(true)}
+                title="Add custom morning habit"
+                aria-label="Add habit"
+              >
+                <Plus size={18} />
               </button>
             </div>
           </div>
@@ -531,7 +591,6 @@ export const RoutineView: React.FC = () => {
             {morningTasks.map((task) => (
               <div
                 key={task.id}
-                onClick={() => handleToggleTask(task.id)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -539,11 +598,13 @@ export const RoutineView: React.FC = () => {
                   padding: '12px 14px',
                   borderRadius: '16px',
                   background: task.completed ? 'var(--md-sys-color-tertiary-container)' : '#f8fafc',
-                  cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  onClick={() => handleToggleTask(task.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, cursor: 'pointer' }}
+                >
                   <div style={{
                     width: '24px',
                     height: '24px',
@@ -573,9 +634,21 @@ export const RoutineView: React.FC = () => {
                   </div>
                 </div>
 
-                <span className="md3-chip" style={{ height: '22px', fontSize: '10px', padding: '0 8px' }}>
-                  Step {task.orderIndex}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="md3-chip" style={{ height: '22px', fontSize: '10px', padding: '0 8px' }}>
+                    Step {task.orderIndex}
+                  </span>
+                  {!task.isMandatory && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteHabit(task.id)}
+                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                      title="Delete routine"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -591,7 +664,7 @@ export const RoutineView: React.FC = () => {
             <div className="ref-progress-striped">
               <div
                 className="ref-progress-striped-fill"
-                style={{ width: `${Math.round((morningTasks.filter((t) => t.completed).length / morningTasks.length) * 100)}%` }}
+                style={{ width: `${Math.round((morningTasks.filter((t) => t.completed).length / Math.max(1, morningTasks.length)) * 100)}%` }}
               />
               <span className="ref-progress-striped-text">
                 {morningTasks.filter((t) => t.completed).length === morningTasks.length ? 'Sequence Complete' : 'In Progress'}
@@ -612,7 +685,11 @@ export const RoutineView: React.FC = () => {
               <span className="ref-task-review-badge">
                 {disciplinesStatus.sleepDone ? 'Logged ✓' : 'Circadian Sync'}
               </span>
-              <button className="ref-arrow-btn" aria-label="View sleep tracker">
+              <button
+                className="ref-arrow-btn"
+                onClick={() => setActiveFilter(activeFilter === 'SLEEP' ? 'ALL' : 'SLEEP')}
+                aria-label="View sleep tracker"
+              >
                 <ArrowUpRight size={18} />
               </button>
             </div>
@@ -643,8 +720,13 @@ export const RoutineView: React.FC = () => {
               <span className="ref-task-review-badge">
                 {eveningTasks.filter((t) => t.completed).length}/{eveningTasks.length} Steps
               </span>
-              <button className="ref-arrow-btn" aria-label="Evening checklist">
-                <ArrowUpRight size={18} />
+              <button
+                className="ref-arrow-btn"
+                onClick={() => setShowAddHabitModal(true)}
+                title="Add evening habit"
+                aria-label="Add habit"
+              >
+                <Plus size={18} />
               </button>
             </div>
           </div>
@@ -663,7 +745,6 @@ export const RoutineView: React.FC = () => {
             {eveningTasks.map((task) => (
               <div
                 key={task.id}
-                onClick={() => handleToggleTask(task.id)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -671,11 +752,13 @@ export const RoutineView: React.FC = () => {
                   padding: '12px 14px',
                   borderRadius: '16px',
                   background: task.completed ? 'var(--md-sys-color-tertiary-container)' : '#f8fafc',
-                  cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  onClick={() => handleToggleTask(task.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, cursor: 'pointer' }}
+                >
                   <div style={{
                     width: '24px',
                     height: '24px',
@@ -705,9 +788,21 @@ export const RoutineView: React.FC = () => {
                   </div>
                 </div>
 
-                <span className="md3-chip" style={{ height: '22px', fontSize: '10px', padding: '0 8px' }}>
-                  Step {task.orderIndex}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="md3-chip" style={{ height: '22px', fontSize: '10px', padding: '0 8px' }}>
+                    Step {task.orderIndex}
+                  </span>
+                  {!task.isMandatory && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteHabit(task.id)}
+                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                      title="Delete routine"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -723,12 +818,106 @@ export const RoutineView: React.FC = () => {
             <div className="ref-progress-striped">
               <div
                 className="ref-progress-striped-fill"
-                style={{ width: `${Math.round((eveningTasks.filter((t) => t.completed).length / eveningTasks.length) * 100)}%` }}
+                style={{ width: `${Math.round((eveningTasks.filter((t) => t.completed).length / Math.max(1, eveningTasks.length)) * 100)}%` }}
               />
               <span className="ref-progress-striped-text">
                 {eveningTasks.filter((t) => t.completed).length === eveningTasks.length ? 'Ready for Sleep' : 'Wind-Down Active'}
               </span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Custom Habit Modal Dialog ──────────────────────────── */}
+      {showAddHabitModal && (
+        <div className="md3-scrim" role="dialog" aria-modal="true">
+          <div className="md3-dialog">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sparkles size={18} color="var(--md-sys-color-primary)" />
+                <h3 style={{
+                  fontFamily: 'var(--md-sys-typescale-title-large-font)',
+                  fontSize: 'var(--md-sys-typescale-title-large-size)',
+                  fontWeight: 700
+                }}>
+                  Add Custom Discipline
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowAddHabitModal(false)}
+                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
+                aria-label="Close dialog"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddHabit} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '6px' }}>
+              <div>
+                <label className="md3-field-label">Discipline / Habit Name:</label>
+                <input
+                  type="text"
+                  required
+                  className="md3-field-outlined"
+                  value={newHabitName}
+                  onChange={(e) => setNewHabitName(e.target.value)}
+                  placeholder="e.g. 100 Pushups & Cold Shower"
+                />
+              </div>
+
+              <div>
+                <label className="md3-field-label">Routine Time Slot:</label>
+                <select
+                  className="md3-select"
+                  value={newHabitCategory}
+                  onChange={(e) => setNewHabitCategory(e.target.value as 'MORNING' | 'EVENING' | 'CUSTOM')}
+                >
+                  <option value="MORNING">Morning Sovereign Sequence</option>
+                  <option value="EVENING">Evening Wind-Down Checklist</option>
+                  <option value="CUSTOM">Custom All-Day Habit</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div>
+                  <label className="md3-field-label">Target Time:</label>
+                  <input
+                    type="text"
+                    className="md3-field-outlined"
+                    value={newHabitTimeHint}
+                    onChange={(e) => setNewHabitTimeHint(e.target.value)}
+                    placeholder="e.g. 06:45 AM"
+                  />
+                </div>
+                <div>
+                  <label className="md3-field-label">Duration (min):</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="md3-field-outlined"
+                    value={newHabitDuration}
+                    onChange={(e) => setNewHabitDuration(parseInt(e.target.value) || 10)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  className="md3-button-text"
+                  onClick={() => setShowAddHabitModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="md3-button-filled"
+                >
+                  <Plus size={16} />
+                  Add Discipline
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

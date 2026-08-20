@@ -16,6 +16,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavigationTab } from './types';
 import { db } from './services/db';
+import { androidSystem } from './services/androidSystem';
 import { AndroidShell } from './components/shell/AndroidShell';
 import { StartView } from './components/shell/StartView';
 import { RecoveryView } from './components/recovery/RecoveryView';
@@ -39,6 +40,44 @@ export const App: React.FC = () => {
 
   /** Controls visibility of the warrior profile settings modal */
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
+
+  /**
+   * Android Hardware Back Button Dispatcher.
+   * Priority 100: Close Crisis Modal
+   * Priority 90: Close Profile Modal
+   * Priority 50: Return to Recovery / Start dashboard if in sub-tab
+   */
+  useEffect(() => {
+    const unregCrisis = androidSystem.registerBackHandler('crisis-modal', 100, () => {
+      if (isCrisisOpen) {
+        setIsCrisisOpen(false);
+        return true;
+      }
+      return false;
+    });
+
+    const unregProfile = androidSystem.registerBackHandler('profile-modal', 90, () => {
+      if (isProfileOpen) {
+        setIsProfileOpen(false);
+        return true;
+      }
+      return false;
+    });
+
+    const unregNav = androidSystem.registerBackHandler('sub-navigation', 50, () => {
+      if (activeTab !== 'recovery' && activeTab !== 'start') {
+        setActiveTab('recovery');
+        return true;
+      }
+      return false;
+    });
+
+    return () => {
+      unregCrisis();
+      unregProfile();
+      unregNav();
+    };
+  }, [isCrisisOpen, isProfileOpen, activeTab]);
 
   /**
    * On mount, read the saved archetype from the database and apply it

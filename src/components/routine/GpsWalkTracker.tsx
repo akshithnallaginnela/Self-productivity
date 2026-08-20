@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { gpsTracker, GpsState } from '../../services/gpsTracker';
 import { db } from '../../services/db';
+import { androidSystem } from '../../services/androidSystem';
 
 interface GpsWalkTrackerProps {
   onWalkFinished?: () => void;
@@ -45,6 +46,7 @@ export const GpsWalkTracker: React.FC<GpsWalkTrackerProps> = ({ onWalkFinished }
     return () => {
       unsub();
       unsubDb();
+      androidSystem.releaseWakeLock();
     };
   }, []);
 
@@ -55,6 +57,7 @@ export const GpsWalkTracker: React.FC<GpsWalkTrackerProps> = ({ onWalkFinished }
 
   const handleStartWalk = (forceSim: boolean = false) => {
     gpsTracker.startWalk(3000, forceSim);
+    androidSystem.requestWakeLock();
     if (forceSim) {
       setShowSimNotice(true);
       setTimeout(() => setShowSimNotice(false), 4000);
@@ -66,6 +69,7 @@ export const GpsWalkTracker: React.FC<GpsWalkTrackerProps> = ({ onWalkFinished }
   };
 
   const handleFinishWalk = () => {
+    androidSystem.releaseWakeLock();
     const session = gpsTracker.finishWalk();
     if (session && onWalkFinished) {
       onWalkFinished();
@@ -73,6 +77,7 @@ export const GpsWalkTracker: React.FC<GpsWalkTrackerProps> = ({ onWalkFinished }
   };
 
   const handleCancelWalk = () => {
+    androidSystem.releaseWakeLock();
     gpsTracker.cancelWalk();
   };
 

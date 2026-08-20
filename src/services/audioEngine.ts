@@ -78,6 +78,18 @@ class WebAudioEngine {
   private currentTrackId: string | null = null;
   private onStateChange: ((playing: boolean, trackId: string | null) => void) | null = null;
 
+  constructor() {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.ctx && this.isPlaying) {
+          if (this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(() => {});
+          }
+        }
+      });
+    }
+  }
+
   /**
    * Initializes or resumes the Web Audio Context.
    * Browsers require user interaction before activating AudioContext.
@@ -88,7 +100,7 @@ class WebAudioEngine {
       this.ctx = new AudioCtxClass();
     }
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
     return this.ctx;
   }

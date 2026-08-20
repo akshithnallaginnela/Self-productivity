@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Center group offset for 108x108 adaptive viewport -->
+    <group
+        android:translateX="4"
+        android:translateY="4">
+
+        <!-- Outer Sovereign Hexagonal Shield Crest -->
+        <path
+            android:pathData="M50,4 L88,22 L88,62 L50,96 L12,62 L12,22 Z"
+            android:strokeWidth="3"
+            android:fillColor="#18181b">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:startX="10"
+                    android:startY="10"
+                    android:endX="90"
+                    android:endY="90"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#FBBF24" />
+                    <item android:offset="0.5" android:color="#D97706" />
+                    <item android:offset="1.0" android:color="#92400E" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Left Wing Feathers -->
+        <path
+            android:pathData="M50,32 L22,18 L10,38 L30,46 L14,56 L34,62 L22,74 L50,86 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="0"
+                    android:startY="0"
+                    android:endX="50"
+                    android:endY="50"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#FEF3C7" />
+                    <item android:offset="0.4" android:color="#F59E0B" />
+                    <item android:offset="1.0" android:color="#B45309" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Right Wing Feathers -->
+        <path
+            android:pathData="M50,32 L78,18 L90,38 L70,46 L86,56 L66,62 L78,74 L50,86 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="50"
+                    android:startY="0"
+                    android:endX="100"
+                    android:endY="50"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#FBBF24" />
+                    <item android:offset="0.5" android:color="#D97706" />
+                    <item android:offset="1.0" android:color="#92400E" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Apex Eagle Head Crest -->
+        <path
+            android:pathData="M50,14 L58,28 L50,38 L42,28 Z"
+            android:fillColor="#FFFEF7" />
+
+        <!-- Sharp Amber Beak -->
+        <path
+            android:pathData="M50,38 L56,46 L50,50 L44,46 Z"
+            android:fillColor="#F59E0B" />
+
+        <!-- Inner Sovereign Core Flame -->
+        <path
+            android:pathData="M50,50 L60,62 L50,78 L40,62 Z"
+            android:fillColor="#18181B"
+            android:strokeColor="#FEF3C7"
+            android:strokeWidth="1.5" />
+
+        <path
+            android:pathData="M50,60 A4,4 0 1,0 50,68 A4,4 0 1,0 50,60 Z"
+            android:fillColor="#F59E0B" />
+
+    </group>
+</vector>

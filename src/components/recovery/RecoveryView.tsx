@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, MilestoneBadge, TriggerLog, TriggerCategory } from '../../types';
 import { db } from '../../services/db';
+import { audioEngine } from '../../services/audioEngine';
 
 interface RecoveryViewProps {
   onOpenCrisis: () => void;
@@ -410,7 +411,14 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({ onOpenCrisis }) => {
               <span className="ref-task-review-badge">
                 {badges.filter((b) => b.unlocked).length}/{badges.length} Unlocked
               </span>
-              <button className="ref-arrow-btn" aria-label="View badges">
+              <button
+                className="ref-arrow-btn"
+                onClick={() => {
+                  setActiveFilter(activeFilter === 'BADGES' ? 'ALL' : 'BADGES');
+                  audioEngine.triggerHaptic('light');
+                }}
+                aria-label="View badges"
+              >
                 <ArrowUpRight size={18} />
               </button>
             </div>

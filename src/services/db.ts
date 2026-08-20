@@ -162,6 +162,56 @@ class LocalDatabase {
     if (!localStorage.getItem(STORAGE_KEYS.JOURNALS)) {
       localStorage.setItem(STORAGE_KEYS.JOURNALS, JSON.stringify(DEFAULT_JOURNALS));
     }
+
+    this.initIndexedDBBackup();
+  }
+
+  /**
+   * Initializes IndexedDB shadow backup for Android storage durability.
+   */
+  private initIndexedDBBackup(): void {
+    if (typeof window === 'undefined' || !('indexedDB' in window)) return;
+    try {
+      const request = indexedDB.open('sovereign_eagle_vault_v1', 1);
+      request.onupgradeneeded = (e: any) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('snapshots')) {
+          db.createObjectStore('snapshots', { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = (e: any) => {
+        const db = e.target.result;
+        const tx = db.transaction('snapshots', 'readonly');
+        const store = tx.objectStore('snapshots');
+        const getReq = store.get('latest_backup');
+        getReq.onsuccess = () => {
+          if (getReq.result && !localStorage.getItem(STORAGE_KEYS.PROFILE)) {
+            // Restore from IndexedDB
+            this.importDataJSON(getReq.result.data);
+          }
+        };
+      };
+    } catch {
+      // IndexedDB unavailable
+    }
+  }
+
+  /**
+   * Asynchronously snapshots full state to IndexedDB shadow vault.
+   */
+  private shadowSyncToIndexedDB(): void {
+    if (typeof window === 'undefined' || !('indexedDB' in window)) return;
+    try {
+      const request = indexedDB.open('sovereign_eagle_vault_v1', 1);
+      request.onsuccess = (e: any) => {
+        const db = e.target.result;
+        const tx = db.transaction('snapshots', 'readwrite');
+        const store = tx.objectStore('snapshots');
+        store.put({ id: 'latest_backup', data: this.exportDataJSON(), timestamp: Date.now() });
+      };
+    } catch {
+      // Ignore background sync errors
+    }
   }
 
   /**
@@ -181,6 +231,7 @@ class LocalDatabase {
    */
   private notify(): void {
     this.listeners.forEach(listener => listener());
+    this.shadowSyncToIndexedDB();
     try {
       widgetBridge.syncToNativeWidgets(
         this.getProfile(),
@@ -464,6 +515,31 @@ class LocalDatabase {
    */
   public resetDailyRoutines(): void {
     const routines = this.getRoutines().map(r => ({ ...r, completed: false, completedAt: undefined }));
+    localStorage.setItem(STORAGE_KEYS.ROUTINE_TASKS, JSON.stringify(routines));
+    this.notify();
+  }
+
+  /**
+   * Adds a new custom routine task.
+   */
+  public addRoutineTask(task: Omit<RoutineTask, 'id' | 'completed'>): RoutineTask {
+    const routines = this.getRoutines();
+    const newTask: RoutineTask = {
+      ...task,
+      id: `task-${Date.now()}`,
+      completed: false
+    };
+    const updated = [...routines, newTask];
+    localStorage.setItem(STORAGE_KEYS.ROUTINE_TASKS, JSON.stringify(updated));
+    this.notify();
+    return newTask;
+  }
+
+  /**
+   * Deletes a routine task by ID.
+   */
+  public deleteRoutineTask(id: string): void {
+    const routines = this.getRoutines().filter(r => r.id !== id);
     localStorage.setItem(STORAGE_KEYS.ROUTINE_TASKS, JSON.stringify(routines));
     this.notify();
   }
