@@ -1203,7 +1203,7 @@
 /* ── Floating Dark Bottom Navigation Dock ─────────────────────────────────── */
 .ref-bottom-dock-wrapper {
   position: absolute;
-  bottom: 20px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
   left: 0;
   right: 0;
   display: flex;
