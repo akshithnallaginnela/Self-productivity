@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
 
-    <!-- Group scaled and centered within the 72dp safe circle of the 108dp canvas -->
+    <!-- Group scaled and centered to fill 288x288 splash icon canvas -->
     <group
-        android:translateX="20"
-        android:translateY="20"
-        android:scaleX="0.1328"
-        android:scaleY="0.1328">
+        android:translateX="16"
+        android:translateY="16"
+        android:scaleX="0.5"
+        android:scaleY="0.5">
 
         <!-- Outer Hexagonal Shield with Beveled Chamfers -->
         <path
             android:pathData="M256,36 L452,124 L452,320 L256,476 L60,320 L60,124 Z"
             android:fillColor="#161820"
-            android:strokeWidth="14"
+            android:strokeWidth="12"
             android:strokeLineJoin="round"
             android:strokeLineCap="round">
             <aapt:attr name="android:strokeColor">
@@ -38,7 +38,7 @@
         <!-- Inner Subtle Shield Inset Rim -->
         <path
             android:pathData="M256,58 L432,136 L432,308 L256,448 L80,308 L80,136 Z"
-            android:strokeWidth="2.5"
+            android:strokeWidth="2"
             android:strokeColor="#55F59E0B"
             android:strokeLineJoin="round" />
 
@@ -110,6 +110,18 @@
                 </gradient>
             </aapt:attr>
         </path>
+
+        <!-- Dynamic Feather Rib Separators -->
+        <path
+            android:pathData="M256,188 L132,144 M200,220 L112,196 M220,274 L136,248 M256,368 L172,316"
+            android:strokeWidth="3"
+            android:strokeColor="#161820"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M256,188 L380,144 M312,220 L400,196 M292,274 L376,248 M256,368 L340,316"
+            android:strokeWidth="3"
+            android:strokeColor="#161820"
+            android:strokeLineJoin="round" />
 
         <!-- Apex Eagle Crest / Crown Feathers -->
         <path

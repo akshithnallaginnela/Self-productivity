@@ -7,142 +7,171 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const assetsDir = path.join(rootDir, 'assets');
+const androidResDir = path.join(rootDir, 'android', 'app', 'src', 'main', 'res');
+
+const sourceLogo = path.join(assetsDir, 'logo.png');
 
 if (!fs.existsSync(assetsDir)) {
   fs.mkdirSync(assetsDir, { recursive: true });
 }
 
-// 1. Full Emblem SVG Elements (without root <svg>)
-const emblemInner = `
-  <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#27272A"/>
-      <stop offset="100%" stop-color="#09090B"/>
-    </linearGradient>
-    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FEF3C7"/>
-      <stop offset="40%" stop-color="#F59E0B"/>
-      <stop offset="100%" stop-color="#B45309"/>
-    </linearGradient>
-    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FBBF24"/>
-      <stop offset="50%" stop-color="#D97706"/>
-      <stop offset="100%" stop-color="#78350F"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Sovereign Outer Hexagonal Shield Crest -->
-  <path d="M 256 50 L 440 135 L 440 330 L 256 462 L 72 330 L 72 135 Z" fill="#18181B" stroke="url(#shieldGrad)" stroke-width="14" stroke-linejoin="round"/>
-
-  <!-- Left Sovereign Wing -->
-  <path d="M 256 180 L 120 120 L 70 200 L 160 240 L 90 290 L 175 320 L 125 380 L 256 420 Z" fill="url(#goldGrad)"/>
-
-  <!-- Right Sovereign Wing -->
-  <path d="M 256 180 L 392 120 L 442 200 L 352 240 L 422 290 L 337 320 L 387 380 L 256 420 Z" fill="url(#shieldGrad)"/>
-
-  <!-- Sovereign Apex Eagle Head -->
-  <polygon points="256,90 295,155 256,200 217,155" fill="#FFFFFF"/>
-  <polygon points="256,200 282,240 256,260 230,240" fill="#F59E0B"/>
-
-  <!-- Core Flame Crystal -->
-  <polygon points="256,265 305,325 256,400 207,325" fill="#18181B" stroke="#FEF3C7" stroke-width="6"/>
-  <circle cx="256" cy="335" r="16" fill="#F59E0B"/>
-`;
-
-// Full logo with background
-const fullLogoSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <rect width="1024" height="1024" fill="#18181B"/>
-  <g transform="translate(102.4, 102.4) scale(1.6)">
-    ${emblemInner}
-  </g>
-</svg>
-`;
-
-// Adaptive Icon Foreground (Transparent background, fits inside 66% safe circle)
-// Scale 512x512 down to ~614x614 and center at (512, 512) -> offset = (1024 - 512*1.2)/2 = 204.8
-const adaptiveForegroundSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <g transform="translate(204.8, 204.8) scale(1.2)">
-    ${emblemInner}
-  </g>
-</svg>
-`;
-
-// Adaptive Icon Background
-const adaptiveBackgroundSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <rect width="1024" height="1024" fill="#18181B"/>
-</svg>
-`;
-
-// Splash Screen (2732x2732) - Center Emblem + Dark Canvas
-// Emblem size: 512 * 1.5 = 768px. Offset: (2732 - 768)/2 = 982
-const splashSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732" width="2732" height="2732">
-  <rect width="2732" height="2732" fill="#18181B"/>
-  <g transform="translate(982, 982) scale(1.5)">
-    ${emblemInner}
-  </g>
-</svg>
-`;
-
 async function generate() {
-  console.log('Generating high-resolution source assets...');
+  if (!fs.existsSync(sourceLogo)) {
+    console.error(`❌ Source logo not found at ${sourceLogo}`);
+    console.error('Please save the new logo image to that path before running this script.');
+    process.exit(1);
+  }
 
-  // 1. logo.png (1024x1024)
-  await sharp(Buffer.from(fullLogoSvg))
-    .resize(1024, 1024)
-    .png()
-    .toFile(path.join(assetsDir, 'logo.png'));
-  console.log('✔ Generated assets/logo.png');
+  console.log('🚀 Generating master Sovereign Eagle assets from new PNG source...');
 
-  // 2. logo-dark.png (1024x1024)
-  await sharp(Buffer.from(fullLogoSvg))
+  // 1. logo.png (already exists as source, but let's ensure other master assets match)
+  const masterBuffer = await fs.promises.readFile(sourceLogo);
+
+  // 2. logo-dark.png
+  await sharp(masterBuffer)
     .resize(1024, 1024)
-    .png()
     .toFile(path.join(assetsDir, 'logo-dark.png'));
-  console.log('✔ Generated assets/logo-dark.png');
 
-  // 3. icon-only.png (1024x1024)
-  await sharp(Buffer.from(fullLogoSvg))
+  // 3. icon-only.png
+  await sharp(masterBuffer)
     .resize(1024, 1024)
-    .png()
     .toFile(path.join(assetsDir, 'icon-only.png'));
-  console.log('✔ Generated assets/icon-only.png');
 
-  // 4. icon-foreground.png (1024x1024)
-  await sharp(Buffer.from(adaptiveForegroundSvg))
-    .resize(1024, 1024)
+  // 4. icon-foreground.png (Centered with safe margin for adaptive icons)
+  // Adaptive icons need the "meat" of the icon in the center 66% to avoid being clipped.
+  await sharp({
+    create: {
+      width: 1024,
+      height: 1024,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 }
+    }
+  })
+    .composite([{
+      input: await sharp(masterBuffer).resize(720, 720).toBuffer(),
+      gravity: 'center'
+    }])
     .png()
     .toFile(path.join(assetsDir, 'icon-foreground.png'));
-  console.log('✔ Generated assets/icon-foreground.png');
 
-  // 5. icon-background.png (1024x1024)
-  await sharp(Buffer.from(adaptiveBackgroundSvg))
-    .resize(1024, 1024)
+  // 5. icon-background.png (Solid brand color extracted from logo background)
+  await sharp({
+    create: {
+      width: 1024,
+      height: 1024,
+      channels: 4,
+      background: '#18181B' // Sovereign Eagle zinc background
+    }
+  })
     .png()
     .toFile(path.join(assetsDir, 'icon-background.png'));
-  console.log('✔ Generated assets/icon-background.png');
 
-  // 6. splash.png (2732x2732)
-  await sharp(Buffer.from(splashSvg))
-    .resize(2732, 2732)
+  // 6. splash.png & splash-dark.png (2732x2732 master)
+  const splashMaster = await sharp({
+    create: {
+      width: 2732,
+      height: 2732,
+      channels: 4,
+      background: '#18181B'
+    }
+  })
+    .composite([{
+      input: await sharp(masterBuffer).resize(1200, 1200).toBuffer(),
+      gravity: 'center'
+    }])
     .png()
-    .toFile(path.join(assetsDir, 'splash.png'));
-  console.log('✔ Generated assets/splash.png');
+    .toBuffer();
 
-  // 7. splash-dark.png (2732x2732)
-  await sharp(Buffer.from(splashSvg))
-    .resize(2732, 2732)
-    .png()
-    .toFile(path.join(assetsDir, 'splash-dark.png'));
-  console.log('✔ Generated assets/splash-dark.png');
+  await fs.promises.writeFile(path.join(assetsDir, 'splash.png'), splashMaster);
+  await fs.promises.writeFile(path.join(assetsDir, 'splash-dark.png'), splashMaster);
 
-  console.log('All source assets created successfully in assets/ directory!');
+  console.log('\n📱 Generating native Android multi-density drawables & mipmaps...');
+
+  // Launcher Icons
+  const mipmapDensities = [
+    { dir: 'mipmap-mdpi', size: 48, fgSize: 108 },
+    { dir: 'mipmap-hdpi', size: 72, fgSize: 162 },
+    { dir: 'mipmap-xhdpi', size: 96, fgSize: 216 },
+    { dir: 'mipmap-xxhdpi', size: 144, fgSize: 324 },
+    { dir: 'mipmap-xxxhdpi', size: 192, fgSize: 432 }
+  ];
+
+  for (const density of mipmapDensities) {
+    const targetDir = path.join(androidResDir, density.dir);
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+    // ic_launcher.png (Legacy)
+    await sharp(masterBuffer)
+      .resize(density.size, density.size)
+      .toFile(path.join(targetDir, 'ic_launcher.png'));
+
+    // ic_launcher_round.png
+    await sharp(masterBuffer)
+      .resize(density.size, density.size)
+      .composite([{
+        input: Buffer.from(`<svg><circle cx="${density.size/2}" cy="${density.size/2}" r="${density.size/2}" /></svg>`),
+        blend: 'dest-in'
+      }])
+      .toFile(path.join(targetDir, 'ic_launcher_round.png'));
+
+    // Adaptive Foreground
+    await sharp(await fs.promises.readFile(path.join(assetsDir, 'icon-foreground.png')))
+      .resize(density.fgSize, density.fgSize)
+      .toFile(path.join(targetDir, 'ic_launcher_foreground.png'));
+
+    // Adaptive Background
+    await sharp(await fs.promises.readFile(path.join(assetsDir, 'icon-background.png')))
+      .resize(density.fgSize, density.fgSize)
+      .toFile(path.join(targetDir, 'ic_launcher_background.png'));
+  }
+
+  // Splash Screens (Portrait & Landscape, Light & Dark/Night)
+  const splashDensities = [
+    { dirBase: 'drawable-port', w: 320, h: 480, scale: 0.5 },
+    { dirBase: 'drawable-port-hdpi', w: 480, h: 800, scale: 0.5 },
+    { dirBase: 'drawable-port-mdpi', w: 320, h: 480, scale: 0.5 },
+    { dirBase: 'drawable-port-xhdpi', w: 720, h: 1280, scale: 0.5 },
+    { dirBase: 'drawable-port-xxhdpi', w: 960, h: 1600, scale: 0.5 },
+    { dirBase: 'drawable-port-xxxhdpi', w: 1280, h: 1920, scale: 0.5 },
+    { dirBase: 'drawable-port-night-hdpi', w: 480, h: 800, scale: 0.5 },
+    { dirBase: 'drawable-port-night-mdpi', w: 320, h: 480, scale: 0.5 },
+    { dirBase: 'drawable-port-night-xhdpi', w: 720, h: 1280, scale: 0.5 },
+    { dirBase: 'drawable-port-night-xxhdpi', w: 960, h: 1600, scale: 0.5 },
+    { dirBase: 'drawable-port-night-xxxhdpi', w: 1280, h: 1920, scale: 0.5 },
+    { dirBase: 'drawable-land-hdpi', w: 800, h: 480, scale: 0.4 },
+    { dirBase: 'drawable-land-mdpi', w: 480, h: 320, scale: 0.4 },
+    { dirBase: 'drawable-land-xhdpi', w: 1280, h: 720, scale: 0.4 },
+    { dirBase: 'drawable-land-xxhdpi', w: 1600, h: 960, scale: 0.4 },
+    { dirBase: 'drawable-land-xxxhdpi', w: 1920, h: 1280, scale: 0.4 },
+    { dirBase: 'drawable-land-night-hdpi', w: 800, h: 480, scale: 0.4 },
+    { dirBase: 'drawable-land-night-mdpi', w: 480, h: 320, scale: 0.4 },
+    { dirBase: 'drawable-land-night-xhdpi', w: 1280, h: 720, scale: 0.4 },
+    { dirBase: 'drawable-land-night-xxhdpi', w: 1600, h: 960, scale: 0.4 },
+    { dirBase: 'drawable-land-night-xxxhdpi', w: 1920, h: 1280, scale: 0.4 }
+  ];
+
+  for (const s of splashDensities) {
+    const targetDir = path.join(androidResDir, s.dirBase);
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+    const logoSize = Math.round(Math.min(s.w, s.h) * s.scale);
+    await sharp({
+      create: {
+        width: s.w,
+        height: s.h,
+        channels: 4,
+        background: '#18181B'
+      }
+    })
+      .composite([{
+        input: await sharp(masterBuffer).resize(logoSize, logoSize).toBuffer(),
+        gravity: 'center'
+      }])
+      .png()
+      .toFile(path.join(targetDir, 'splash.png'));
+  }
+
+  console.log('\n🎉 ALL assets (including splash-dark and dark/night drawables) updated with the new Sovereign Eagle logo!');
 }
 
-generate().catch(err => {
-  console.error('Failed to generate source assets:', err);
-  process.exit(1);
-});
+generate().catch(console.error);

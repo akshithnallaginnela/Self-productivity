@@ -135,14 +135,14 @@ html, body {
 
 .android-device-frame.native-mode .app-content-area {
   padding-top: calc(env(safe-area-inset-top, 0px) + 52px);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 128px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
 }
 
 
 /* ── Floating Crisis FAB (Positioned safely above bottom dock) ───────────── */
 .crisis-fab {
   position: absolute;
-  bottom: 84px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
   right: 18px;
   z-index: 42;
   pointer-events: auto;

@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 
+import androidx.core.splashscreen.SplashScreen;
 import androidx.core.view.WindowCompat;
 
 import com.getcapacitor.BridgeActivity;
@@ -33,6 +34,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Initialize Android 12+ Core SplashScreen compat before super.onCreate
+        SplashScreen.installSplashScreen(this);
         registerPlugin(WidgetBridgePlugin.class);
         super.onCreate(savedInstanceState);
 

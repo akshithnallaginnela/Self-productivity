@@ -61,7 +61,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({ isScrolled, onOpenProfile 
     <header className={`system-status-bar ${isScrolled ? 'scrolled' : ''}`}>
       <div className="status-bar-left">
         {!isNative && <span className="status-bar-time">{currentTime}</span>}
-        <AppLogo size={14} />
+        <AppLogo size={24} />
       </div>
 
       <button
