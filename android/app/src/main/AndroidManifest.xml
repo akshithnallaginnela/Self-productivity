@@ -1,7 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Android Native Hardware & System Permissions -->
+    <!--
+        Permissions are deliberately minimal. Every entry below is actually
+        exercised by shipping code; anything the app does not use is removed so
+        the install-time permission sheet stays honest and Play review stays clean.
+
+        Removed on purpose:
+          FOREGROUND_SERVICE  — no Service exists in this app. GPS and focus
+                                sessions are in-app only (see gpsTracker.ts).
+          USE_BIOMETRIC       — app lock is a local PIN (WebCrypto SHA-256);
+                                no BiometricPrompt is used.
+        RECEIVE_BOOT_COMPLETED, SCHEDULE_EXACT_ALARM and POST_NOTIFICATIONS are
+        merged in from @capacitor/local-notifications' own manifest.
+    -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -9,17 +21,21 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <!-- GPS walk is a core discipline, but the app still runs without a GPS radio. -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
-        android:theme="@style/AppTheme">
+        android:enableOnBackInvokedCallback="true"
+        android:theme="@style/AppTheme.NoActionBar">
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
@@ -44,13 +60,19 @@
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths"></meta-data>
+                android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- 1. Native Sobriety Shield Widget Receiver (4x2) -->
+        <!--
+            App widgets. android:exported="false" is correct here: the only
+            broadcasts these receive are APPWIDGET_UPDATE from the system and
+            our own explicit in-package intents from WidgetBridgePlugin.
+        -->
+
+        <!-- 1. Sobriety Shield (4x2) — streak, rank, one-tap SOS -->
         <receiver
             android:name=".widgets.StreakWidgetProvider"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -59,10 +81,10 @@
                 android:resource="@xml/streak_widget_info" />
         </receiver>
 
-        <!-- 2. Native Habits Widget Receiver (2x2) -->
+        <!-- 2. Habits (2x2) — today's progress, one-tap check-off -->
         <receiver
             android:name=".widgets.HabitsWidgetProvider"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -71,10 +93,10 @@
                 android:resource="@xml/habits_widget_info" />
         </receiver>
 
-        <!-- 3. Native Freelance Forge Widget Receiver (2x2) -->
+        <!-- 3. Freelance Forge (2x2) — month-to-date income vs target -->
         <receiver
             android:name=".widgets.ForgeWidgetProvider"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

@@ -1,86 +1,90 @@
 /**
- * androidSystem.ts — Senior Android Native System & Lifecycle Integration Manager
+ * androidSystem.ts — Android lifecycle, hardware back, wake lock and toasts.
  *
- * Implements:
- *   1. Android Hardware & Predictive Gesture Back Button Dispatcher with priority stack
- *   2. Double-tap-to-exit Toast guard for root navigation
- *   3. Screen WakeLock API Sentinel for 30m Deep Work & GPS tracking
- *   4. Lifecycle visibility change & audio context auto-recovery
- *   5. Native Haptic Feedback & Vibrations fallback bridge
+ * Responsibilities:
+ *   1. Hardware/predictive back dispatch through a priority stack, with a
+ *      double-tap-to-exit guard at the root.
+ *   2. Foreground/background notifications, so the app can run its daily
+ *      rollover when it comes back after midnight.
+ *   3. Screen wake lock for focus and walk sessions, re-acquired after the
+ *      system drops it (which it does on every visibility change).
+ *   4. Material-style toasts.
+ *   5. Haptics.
  */
 
 import { App as CapApp } from '@capacitor/app';
-import { audioEngine } from './audioEngine';
+import { isNativePlatform } from './widgetBridge';
 
 export interface BackButtonHandler {
   id: string;
-  priority: number; // Higher number executed first
-  handler: () => boolean; // Return true if handled, false to pass down
+  priority: number; // higher runs first
+  handler: () => boolean; // true = handled, stop here
 }
+
+type ResumeListener = () => void;
 
 class AndroidSystemManager {
   private backHandlers: BackButtonHandler[] = [];
-  private lastBackPressTime: number = 0;
+  private lastBackPressTime = 0;
   private wakeLockSentinel: WakeLockSentinel | null = null;
-  private isWakeLockRequested: boolean = false;
+  private isWakeLockWanted = false;
   private toastElement: HTMLDivElement | null = null;
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  private resumeListeners: ResumeListener[] = [];
 
   constructor() {
     this.initBackButtonListener();
     this.initLifecycleWatcher();
   }
 
-  /**
-   * Initializes the native Capacitor hardware back button event listener.
-   */
-  private initBackButtonListener(): void {
-    try {
-      CapApp.addListener('backButton', () => {
-        this.handleHardwareBack();
-      });
-    } catch {
-      // Running in standard browser / desktop environment
-      if (typeof window !== 'undefined') {
-        window.addEventListener('popstate', () => {
-          this.handleHardwareBack();
-        });
-      }
-    }
+  /** True when running inside the Android shell rather than a browser tab. */
+  public get isNative(): boolean {
+    return isNativePlatform();
   }
 
-  /**
-   * Dispatches hardware back event through registered priority stack.
-   */
-  public handleHardwareBack(): void {
-    // Sort handlers by priority descending (highest priority first)
-    const sorted = [...this.backHandlers].sort((a, b) => b.priority - a.priority);
+  /* ── back button ──────────────────────────────────────────────────────── */
 
+  private initBackButtonListener(): void {
+    void CapApp.addListener('backButton', () => this.handleHardwareBack()).catch(() => {
+      // Browser: approximate with history popstate so the UI is testable.
+      if (typeof window !== 'undefined') {
+        window.addEventListener('popstate', () => this.handleHardwareBack());
+      }
+    });
+  }
+
+  public handleHardwareBack(): void {
+    const sorted = [...this.backHandlers].sort((a, b) => b.priority - a.priority);
     for (const item of sorted) {
-      const handled = item.handler();
+      let handled = false;
+      try {
+        handled = item.handler();
+      } catch (err) {
+        console.error(`[androidSystem] Back handler "${item.id}" threw:`, err);
+      }
       if (handled) {
-        audioEngine.triggerHaptic('light');
+        this.triggerHaptic('light');
         return;
       }
     }
 
-    // Root level double-tap to exit guard
+    // Root: require a second press within 2s before exiting.
     const now = Date.now();
     if (now - this.lastBackPressTime < 2000) {
-      CapApp.exitApp().catch(() => {});
+      void CapApp.exitApp().catch(() => {});
     } else {
       this.lastBackPressTime = now;
       this.showToast('Press back again to exit');
-      audioEngine.triggerHaptic('light');
+      this.triggerHaptic('light');
     }
   }
 
-  /**
-   * Registers a back button handler. Returns unsubscribe function.
-   * @param id Unique handler ID
-   * @param priority Priority level (e.g. 100 for dialogs, 50 for sub-views)
-   * @param handler Function returning true if handled
-   */
-  public registerBackHandler(id: string, priority: number, handler: () => boolean): () => void {
+  /** Registers a back handler. Returns an unsubscribe function. */
+  public registerBackHandler(
+    id: string,
+    priority: number,
+    handler: () => boolean
+  ): () => void {
     this.backHandlers = this.backHandlers.filter((h) => h.id !== id);
     this.backHandlers.push({ id, priority, handler });
     return () => {
@@ -88,27 +92,51 @@ class AndroidSystemManager {
     };
   }
 
-  /**
-   * Watches app visibility changes to restore Web Audio context and WakeLock.
-   */
-  private initLifecycleWatcher(): void {
-    if (typeof document === 'undefined') return;
+  /* ── lifecycle ────────────────────────────────────────────────────────── */
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        // Re-acquire wake lock if it was active
-        if (this.isWakeLockRequested && !this.wakeLockSentinel) {
-          this.requestWakeLock();
-        }
-      }
+  private initLifecycleWatcher(): void {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        // The OS releases the wake lock whenever the page is hidden.
+        if (this.isWakeLockWanted && !this.wakeLockSentinel) void this.requestWakeLock();
+        this.emitResume();
+      });
+    }
+
+    void CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) this.emitResume();
+    }).catch(() => {
+      /* browser — visibilitychange above already covers it */
     });
   }
 
   /**
-   * Requests Android Screen WakeLock to prevent screen timeout during focus/GPS sessions.
+   * Subscribes to "app returned to the foreground". Used to run the daily
+   * rollover: without it, an app left open across midnight never rolls over.
    */
+  public onResume(listener: ResumeListener): () => void {
+    this.resumeListeners.push(listener);
+    return () => {
+      this.resumeListeners = this.resumeListeners.filter((l) => l !== listener);
+    };
+  }
+
+  private emitResume(): void {
+    for (const l of this.resumeListeners) {
+      try {
+        l();
+      } catch (err) {
+        console.error('[androidSystem] Resume listener threw:', err);
+      }
+    }
+  }
+
+  /* ── wake lock ────────────────────────────────────────────────────────── */
+
+  /** Keeps the screen on during a focus or walk session. */
   public async requestWakeLock(): Promise<boolean> {
-    this.isWakeLockRequested = true;
+    this.isWakeLockWanted = true;
     try {
       if ('wakeLock' in navigator && navigator.wakeLock) {
         this.wakeLockSentinel = await navigator.wakeLock.request('screen');
@@ -117,67 +145,66 @@ class AndroidSystemManager {
         });
         return true;
       }
-    } catch {
-      // Wake lock unavailable or battery saver active
+    } catch (err) {
+      // Battery saver refuses wake locks; that is normal, not a bug.
+      console.info('[androidSystem] Wake lock unavailable:', err);
     }
     return false;
   }
 
-  /**
-   * Releases active Screen WakeLock.
-   */
   public releaseWakeLock(): void {
-    this.isWakeLockRequested = false;
-    if (this.wakeLockSentinel) {
-      try {
-        this.wakeLockSentinel.release().catch(() => {});
-      } catch {
-        // Ignore release error
-      }
-      this.wakeLockSentinel = null;
-    }
+    this.isWakeLockWanted = false;
+    const sentinel = this.wakeLockSentinel;
+    this.wakeLockSentinel = null;
+    if (sentinel) void sentinel.release().catch(() => {});
   }
 
-  /**
-   * Displays an Android Material 3 floating Toast notification.
-   */
-  public showToast(message: string): void {
+  /* ── toast ────────────────────────────────────────────────────────────── */
+
+  /** Shows a transient message. Styling lives in components.css. */
+  public showToast(message: string, durationMs = 2000): void {
     if (typeof document === 'undefined') return;
 
-    if (this.toastElement) {
-      this.toastElement.remove();
-    }
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    if (this.toastElement) this.toastElement.remove();
 
     const toast = document.createElement('div');
     toast.className = 'android-toast';
-    toast.innerText = message;
-    toast.style.cssText = `
-      position: fixed;
-      bottom: 90px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(30, 41, 59, 0.95);
-      color: #ffffff;
-      padding: 10px 20px;
-      border-radius: 24px;
-      font-size: 13px;
-      font-weight: 700;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-      z-index: 999999;
-      pointer-events: none;
-      backdrop-filter: blur(8px);
-      animation: fadeInOut 2s cubic-bezier(0.2, 0, 0, 1) forwards;
-    `;
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.textContent = message;
 
     document.body.appendChild(toast);
     this.toastElement = toast;
 
-    setTimeout(() => {
+    this.toastTimer = setTimeout(() => {
       if (this.toastElement === toast) {
         toast.remove();
         this.toastElement = null;
       }
-    }, 2000);
+      this.toastTimer = null;
+    }, durationMs);
+  }
+
+  /* ── haptics ──────────────────────────────────────────────────────────── */
+
+  /**
+   * Vibration feedback via the Web Vibration API, which the Android WebView
+   * supports given the VIBRATE permission. Silently absent on desktop.
+   */
+  public triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'success' = 'light'): void {
+    if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+    const patterns: Record<typeof type, number | number[]> = {
+      light: 15,
+      medium: [20, 30, 20],
+      heavy: [35, 40, 35],
+      success: [15, 30, 45, 30, 60]
+    };
+    try {
+      navigator.vibrate(patterns[type]);
+    } catch {
+      /* nothing meaningful to do */
+    }
   }
 }
 

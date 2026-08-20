@@ -1,12 +1,10 @@
 /**
- * GpsWalkTracker.tsx — Monitored GPS Walk & Real-time Step Counter
+ * GpsWalkTracker.tsx — live GPS walk with honest verification state.
  *
- * Implements:
- *   1. Real-time GPS Geolocation distance accumulation & biomechanical step estimation
- *   2. Live duration, pace (min/km), and target milestone progress ring
- *   3. Touch-friendly Start, Pause, Finish controls
- *   4. Verified discipline completion that unlocks today's daily streak (+120 XP)
- *   5. Seamless indoor / desktop simulation toggle
+ * The important behavioural change: indoor mode is now an explicit choice that
+ * produces a clearly-labelled UNVERIFIED session worth no XP and unable to
+ * secure the streak. Previously a denied location permission silently fell
+ * back to synthesised steps, so standing still could earn the day.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -16,261 +14,207 @@ import {
   Pause,
   CheckCircle2,
   Navigation,
-  Sparkles,
-  RotateCcw,
-  Zap,
-  Activity
+  Activity,
+  AlertTriangle,
+  Satellite
 } from 'lucide-react';
 import { gpsTracker, GpsState } from '../../services/gpsTracker';
-import { db } from '../../services/db';
+import { db, toDateKey } from '../../services/db';
 import { androidSystem } from '../../services/androidSystem';
+import { audioEngine } from '../../services/audioEngine';
 
 interface GpsWalkTrackerProps {
   onWalkFinished?: () => void;
 }
 
+const STEP_TARGET = 3000;
+
 export const GpsWalkTracker: React.FC<GpsWalkTrackerProps> = ({ onWalkFinished }) => {
-  const [gpsState, setGpsState] = useState<GpsState>(gpsTracker.getState());
-  const [showSimNotice, setShowSimNotice] = useState(false);
-  const [recentWalks, setRecentWalks] = useState(db.getWalkSessions());
+  const [gps, setGps] = useState<GpsState>(gpsTracker.getState());
+  const [walks, setWalks] = useState(db.getWalkSessions());
 
   useEffect(() => {
-    const unsub = gpsTracker.subscribe((state) => {
-      setGpsState(state);
-    });
-
-    const unsubDb = db.subscribe(() => {
-      setRecentWalks(db.getWalkSessions());
-    });
-
+    const unsubGps = gpsTracker.subscribe(setGps);
+    const unsubDb = db.subscribe(() => setWalks(db.getWalkSessions()));
     return () => {
-      unsub();
+      unsubGps();
       unsubDb();
-      androidSystem.releaseWakeLock();
     };
   }, []);
 
-  const today = new Date().toISOString().split('T')[0];
-  const todayWalks = recentWalks.filter((w) => w.date === today && w.completed);
-  const totalStepsToday = todayWalks.reduce((acc, w) => acc + w.stepsCount, 0);
-  const isGoalCompletedToday = totalStepsToday >= 3000 || todayWalks.length > 0;
+  // Release the wake lock if this card unmounts mid-session.
+  useEffect(() => () => androidSystem.releaseWakeLock(), []);
 
-  const handleStartWalk = (forceSim: boolean = false) => {
-    gpsTracker.startWalk(3000, forceSim);
-    androidSystem.requestWakeLock();
-    if (forceSim) {
-      setShowSimNotice(true);
-      setTimeout(() => setShowSimNotice(false), 4000);
-    }
+  const today = toDateKey();
+  const todayWalks = walks.filter((w) => w.date === today && w.completed);
+  const verifiedToday = todayWalks.filter((w) => w.isVerified);
+  const stepsToday = verifiedToday.reduce((sum, w) => sum + w.stepsCount, 0);
+  const isSecuredToday = verifiedToday.length > 0;
+
+  const handleStart = (mode: 'gps' | 'simulator') => {
+    gpsTracker.startWalk(STEP_TARGET, mode);
+    void androidSystem.requestWakeLock();
+    audioEngine.triggerHaptic('medium');
   };
 
-  const handleTogglePause = () => {
-    gpsTracker.togglePause();
-  };
-
-  const handleFinishWalk = () => {
+  const handleFinish = () => {
     androidSystem.releaseWakeLock();
     const session = gpsTracker.finishWalk();
-    if (session && onWalkFinished) {
-      onWalkFinished();
+    if (session?.completed && session.isVerified) {
+      audioEngine.playMilestoneTriumph();
+      audioEngine.triggerHaptic('success');
     }
+    onWalkFinished?.();
   };
 
-  const handleCancelWalk = () => {
+  const handleCancel = () => {
     androidSystem.releaseWakeLock();
     gpsTracker.cancelWalk();
   };
 
   const formatTime = (totalSeconds: number): string => {
-    const m = Math.floor(totalSeconds / 60);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    const mm = `${m}`.padStart(2, '0');
+    const ss = `${s}`.padStart(2, '0');
+    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
   };
 
-  const stepProgressPercent = Math.min(100, Math.round((gpsState.stepsCount / gpsState.targetSteps) * 100));
-  const distanceKm = (gpsState.distanceMeters / 1000).toFixed(2);
+  const stepProgress = Math.min(100, Math.round((gps.stepsCount / gps.targetSteps) * 100));
 
   return (
-    <div className="md3-card-elevated" style={{ padding: '20px' }}>
-      {/* ── Card Header ────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: 'var(--md-sys-shape-full)',
-            background: isGoalCompletedToday ? 'var(--md-sys-color-tertiary-container)' : 'var(--md-sys-color-primary-container)',
-            color: isGoalCompletedToday ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-on-primary-container)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
+    <div className="gps-card">
+      <div className="gps-card-head">
+        <div className="gps-card-title">
+          <div className={`gps-icon ${isSecuredToday ? 'secured' : ''}`} aria-hidden="true">
             <Footprints size={20} />
           </div>
           <div>
-            <span className="md3-section-title" style={{ fontSize: '10px' }}>MONITORED DISCIPLINE</span>
-            <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
-              GPS Walk & Step Counter
-            </h2>
+            <span className="md3-section-title">Monitored discipline</span>
+            <h2>GPS walk</h2>
           </div>
         </div>
 
-        {isGoalCompletedToday ? (
-          <div className="md3-chip" style={{ background: 'var(--md-sys-color-tertiary-container)', color: 'var(--md-sys-color-on-tertiary-container)', fontWeight: 800 }}>
-            <CheckCircle2 size={13} /> Walk Secured!
-          </div>
-        ) : (
-          <div className="md3-chip" style={{ background: 'rgba(0,0,0,0.04)', color: 'var(--md-sys-color-on-surface-variant)' }}>
-            Goal: 3,000 Steps
-          </div>
-        )}
+        <div className={`md3-chip ${isSecuredToday ? 'md3-chip-success' : ''}`}>
+          {isSecuredToday ? (
+            <>
+              <CheckCircle2 size={13} aria-hidden="true" /> Secured
+            </>
+          ) : (
+            `Goal: ${STEP_TARGET.toLocaleString('en-IN')} steps`
+          )}
+        </div>
       </div>
 
-      {/* ── Active Walking Dashboard or Standby State ────────────────── */}
-      {gpsState.isActive ? (
-        <div style={{ marginTop: '16px' }}>
-          {/* Live Metrics Grid */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1.2fr 1fr 1fr',
-            gap: '10px',
-            background: 'var(--md-sys-color-surface-container)',
-            padding: '16px',
-            borderRadius: 'var(--md-sys-shape-large)',
-            textAlign: 'center'
-          }}>
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)', textTransform: 'uppercase' }}>
-                Live Steps
-              </div>
-              <div style={{ fontSize: '32px', fontWeight: 900, fontFamily: 'var(--md-sys-typescale-display-large-font)', color: 'var(--md-sys-color-primary)', lineHeight: 1.1 }}>
-                {gpsState.stepsCount.toLocaleString()}
-              </div>
-              <div style={{ fontSize: '10px', color: 'var(--md-sys-color-on-surface-variant)', marginTop: '2px' }}>
-                {stepProgressPercent}% of 3k
-              </div>
-            </div>
+      {gps.isActive ? (
+        <div className="gps-active">
+          {/* Verification banner — always visible, never buried */}
+          <div className={`gps-mode-banner ${gps.isVerified ? 'verified' : 'unverified'}`}>
+            {gps.isVerified ? (
+              <>
+                <Satellite size={14} aria-hidden="true" />
+                <span>
+                  {gps.hasFix
+                    ? `GPS verified · ±${gps.gpsAccuracy ?? '—'}m`
+                    : 'Waiting for a GPS fix…'}
+                </span>
+              </>
+            ) : (
+              <>
+                <Activity size={14} aria-hidden="true" />
+                <span>Indoor mode — this session will not count toward your streak</span>
+              </>
+            )}
+          </div>
 
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)', textTransform: 'uppercase' }}>
-                Distance
-              </div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)', marginTop: '4px' }}>
-                {distanceKm} <span style={{ fontSize: '12px', fontWeight: 600 }}>km</span>
-              </div>
-              <div style={{ fontSize: '10px', color: 'var(--md-sys-color-on-surface-variant)', marginTop: '4px' }}>
-                Speed: {gpsState.currentSpeedKmh} km/h
-              </div>
+          {gps.error && (
+            <div className="notice notice-warning" role="status">
+              <AlertTriangle size={15} aria-hidden="true" />
+              <span>{gps.error}</span>
             </div>
+          )}
 
+          <div className="gps-metrics">
             <div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)', textTransform: 'uppercase' }}>
-                Duration
+              <span className="gps-metric-label">Steps</span>
+              <div className="gps-metric-value primary">{gps.stepsCount.toLocaleString('en-IN')}</div>
+              <span className="gps-metric-sub">{stepProgress}% of goal</span>
+            </div>
+            <div>
+              <span className="gps-metric-label">Distance</span>
+              <div className="gps-metric-value">
+                {(gps.distanceMeters / 1000).toFixed(2)}
+                <small> km</small>
               </div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)', marginTop: '4px' }}>
-                {formatTime(gpsState.durationSeconds)}
-              </div>
-              <div style={{ fontSize: '10px', color: 'var(--md-sys-color-on-surface-variant)', marginTop: '4px' }}>
-                {gpsState.isPaused ? '⏸️ Paused' : '🟢 Tracking'}
-              </div>
+              <span className="gps-metric-sub">{gps.currentSpeedKmh} km/h</span>
+            </div>
+            <div>
+              <span className="gps-metric-label">Time</span>
+              <div className="gps-metric-value">{formatTime(gps.durationSeconds)}</div>
+              <span className="gps-metric-sub">{gps.isPaused ? 'Paused' : 'Tracking'}</span>
             </div>
           </div>
 
-          {/* Progress Bar */}
-          <div style={{ marginTop: '12px' }}>
-            <div className="md3-progress-track" style={{ height: '8px' }}>
-              <div
-                className="md3-progress-indicator"
-                style={{ width: `${stepProgressPercent}%` }}
-              />
-            </div>
+          <div className="md3-progress-track">
+            <div className="md3-progress-indicator" style={{ width: `${stepProgress}%` }} />
           </div>
 
-          {/* GPS Mode & Accuracy Tag */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Navigation size={12} color="var(--md-sys-color-primary)" />
-              {gpsState.isSimulated ? 'Indoor / Motion Simulator Mode' : `GPS Active (±${gpsState.gpsAccuracy || 5}m accuracy)`}
-            </span>
-            <span>+{Math.min(120, Math.round(gpsState.stepsCount / 25))} XP Earned</span>
-          </div>
-
-          {/* Control Buttons */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '8px', marginTop: '14px' }}>
-            <button
-              type="button"
-              onClick={handleTogglePause}
-              className="md3-button-tonal md3-button-sm"
-              style={{ width: '100%' }}
-            >
-              {gpsState.isPaused ? <Play size={14} /> : <Pause size={14} />}
-              {gpsState.isPaused ? 'Resume' : 'Pause'}
+          <div className="gps-controls">
+            <button type="button" className="md3-button-tonal md3-button-sm" onClick={() => gpsTracker.togglePause()}>
+              {gps.isPaused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
+              {gps.isPaused ? 'Resume' : 'Pause'}
             </button>
-
-            <button
-              type="button"
-              onClick={handleFinishWalk}
-              className="md3-button-filled md3-button-sm"
-              style={{ width: '100%', gap: '6px' }}
-            >
-              <CheckCircle2 size={15} /> Finish & Log
+            <button type="button" className="md3-button-filled md3-button-sm" onClick={handleFinish}>
+              <CheckCircle2 size={15} aria-hidden="true" />
+              Finish
             </button>
-
-            <button
-              type="button"
-              onClick={handleCancelWalk}
-              className="md3-button-text md3-button-sm"
-              style={{ color: 'var(--md-sys-color-error)', width: '100%' }}
-            >
-              Cancel
+            <button type="button" className="md3-button-text md3-button-sm gps-cancel" onClick={handleCancel}>
+              Discard
             </button>
           </div>
         </div>
       ) : (
-        <div style={{ marginTop: '14px' }}>
-          <p style={{ fontSize: '13px', color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.4 }}>
-            Outdoor walking activates neural dopamine up-regulation and circadian cortisol regulation. Complete a 3,000-step walk or 2.0 km to secure today's streak!
+        <div className="gps-idle">
+          <p className="gps-blurb">
+            A verified outdoor walk secures one of today&apos;s four disciplines. Keep the app
+            open while you walk — tracking stops when Android suspends the screen.
           </p>
 
-          {todayWalks.length > 0 && (
-            <div style={{
-              marginTop: '10px',
-              padding: '10px 12px',
-              background: 'var(--md-sys-color-tertiary-container)',
-              borderRadius: 'var(--md-sys-shape-medium)',
-              fontSize: '12px',
-              fontWeight: 700,
-              color: 'var(--md-sys-color-on-tertiary-container)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              <CheckCircle2 size={16} />
-              <span>Today's Total: {totalStepsToday.toLocaleString()} steps logged across {todayWalks.length} session(s)!</span>
+          {verifiedToday.length > 0 && (
+            <div className="notice notice-success">
+              <CheckCircle2 size={16} aria-hidden="true" />
+              <span>
+                {stepsToday.toLocaleString('en-IN')} steps today across{' '}
+                {verifiedToday.length} verified session{verifiedToday.length === 1 ? '' : 's'}.
+              </span>
             </div>
           )}
 
-          {/* Action Row */}
-          <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
+          <div className="gps-start-row">
             <button
               type="button"
-              onClick={() => handleStartWalk(false)}
-              className="md3-button-filled md3-button-md"
-              style={{ flex: 1, gap: '8px', fontWeight: 800 }}
+              className="md3-button-filled md3-button-md gps-start-primary"
+              onClick={() => handleStart('gps')}
             >
-              <Play size={16} /> Start GPS Walk
+              <Navigation size={16} aria-hidden="true" />
+              Start GPS walk
             </button>
-
             <button
               type="button"
-              onClick={() => handleStartWalk(true)}
               className="md3-button-tonal md3-button-sm"
-              title="Test / Indoor treadmill simulator mode"
-              style={{ flexShrink: 0, padding: '0 12px' }}
+              onClick={() => handleStart('simulator')}
+              title="Log an indoor session. Not GPS-verified, so it earns no XP."
             >
-              <Activity size={15} /> Indoor Sim
+              <Activity size={15} aria-hidden="true" />
+              Indoor
             </button>
           </div>
+
+          <p className="gps-footnote">
+            Indoor sessions are recorded for your own reference but are marked unverified —
+            they do not award XP or secure the day.
+          </p>
         </div>
       )}
     </div>

@@ -1,21 +1,22 @@
 /**
- * RecoveryView.tsx — Monitored Disciplines & Dynamic Sobriety Streak Hub
+ * RecoveryView.tsx — the sobriety dashboard.
  *
- * Implements the reference bento layout & organization:
- *   1. Reference Top Header Bar with spirit avatar & quick action controls
- *   2. Dual-Tone Filter Chips Bar ([ All | 8 ], [ Disciplines | 4 ], etc.)
- *   3. Hero Sobriety Shield with glowing progress ring & confetti celebration
- *   4. Monitored Disciplines Bento Card with ↗ action button & striped progress bar
- *   5. Milestone Badges Chamber & Subconscious Trigger Radar
+ * The hero number is DAYS SOBER, derived from the sobriety anchor and reset
+ * only by an explicit relapse. The daily streak is shown separately and framed
+ * as what it is: engagement momentum. Previously these were the same number,
+ * which meant skipping the app for two days told a sober user they were back
+ * to zero.
+ *
+ * Every figure on this screen comes from stored records. There are no
+ * placeholder counts — a new install shows genuine empty states.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Flame,
   Plus,
   AlertTriangle,
-  Trophy,
   Target,
   Zap,
   ShieldCheck,
@@ -23,69 +24,80 @@ import {
   Footprints,
   Clock,
   Moon,
-  Sparkles,
+  ListChecks,
   ArrowUpRight,
-  ShieldAlert,
   SlidersHorizontal,
-  Bell
+  Bell,
+  RotateCcw
 } from 'lucide-react';
 import { UserProfile, MilestoneBadge, TriggerLog, TriggerCategory } from '../../types';
-import { db } from '../../services/db';
+import { db, nextRankProgress } from '../../services/db';
 import { audioEngine } from '../../services/audioEngine';
+import { notificationService } from '../../services/notificationService';
 
 interface RecoveryViewProps {
   onOpenCrisis: () => void;
+  onOpenRelapse: () => void;
+  onOpenNotifications?: () => void;
 }
 
 type RecoveryFilter = 'ALL' | 'DISCIPLINES' | 'BADGES' | 'TRIGGERS';
 
-export const RecoveryView: React.FC<RecoveryViewProps> = ({ onOpenCrisis }) => {
+const TRIGGER_OPTIONS: Array<{ value: TriggerCategory; label: string }> = [
+  { value: 'STRESS', label: 'Stress and anxiety' },
+  { value: 'FATIGUE', label: 'Late-night fatigue' },
+  { value: 'APP', label: 'An app or feed' },
+  { value: 'EMOTION', label: 'Boredom or low mood' },
+  { value: 'SOCIAL', label: 'Social pressure' },
+  { value: 'LOCATION', label: 'Environment' },
+  { value: 'TIME', label: 'Time-of-day habit' }
+];
+
+export const RecoveryView: React.FC<RecoveryViewProps> = ({
+  onOpenCrisis,
+  onOpenRelapse,
+  onOpenNotifications
+}) => {
   const [profile, setProfile] = useState<UserProfile>(db.getProfile());
   const [badges, setBadges] = useState<MilestoneBadge[]>(db.getBadges());
   const [triggers, setTriggers] = useState<TriggerLog[]>(db.getTriggers());
-  const [disciplinesStatus, setDisciplinesStatus] = useState(db.getTodayDisciplinesStatus());
+  const [status, setStatus] = useState(db.getTodayDisciplinesStatus());
+  const [daysSober, setDaysSober] = useState(db.getDaysSober());
+  const [unreadCount, setUnreadCount] = useState(notificationService.getUnreadCount());
   const [activeFilter, setActiveFilter] = useState<RecoveryFilter>('ALL');
 
-  /** Inline trigger form visibility */
-  const [showTriggerForm, setShowTriggerForm] = useState<boolean>(false);
+  const [showTriggerForm, setShowTriggerForm] = useState(false);
   const [triggerCategory, setTriggerCategory] = useState<TriggerCategory>('STRESS');
-  const [triggerDesc, setTriggerDesc] = useState<string>('');
-  const [triggerIntensity, setTriggerIntensity] = useState<number>(5);
+  const [triggerDesc, setTriggerDesc] = useState('');
+  const [triggerIntensity, setTriggerIntensity] = useState(5);
 
-  const isSecuredToday = disciplinesStatus.isStreakSecured;
-
-  /** Subscribes to reactive database state updates. */
-  useEffect(() => {
-    const unsub = db.subscribe(() => {
-      setProfile(db.getProfile());
-      setBadges(db.getBadges());
-      setTriggers(db.getTriggers());
-      setDisciplinesStatus(db.getTodayDisciplinesStatus());
-    });
-    return () => unsub();
+  const refresh = useCallback(() => {
+    setProfile(db.getProfile());
+    setBadges(db.getBadges());
+    setTriggers(db.getTriggers());
+    setStatus(db.getTodayDisciplinesStatus());
+    setDaysSober(db.getDaysSober());
   }, []);
 
-  /** Computes the SVG circle progress stroke-dashoffset. */
-  const computeRingProgress = (): number => {
-    const nextMilestone = badges.find((b) => !b.unlocked);
+  useEffect(() => db.subscribe(refresh), [refresh]);
+  useEffect(
+    () => notificationService.subscribe((list) => setUnreadCount(list.filter((n) => !n.isRead).length)),
+    []
+  );
+
+  const isSecuredToday = status.isStreakSecured;
+  const unlockedBadges = badges.filter((b) => b.unlocked);
+  const nextMilestone = badges.find((b) => !b.unlocked);
+  const rank = nextRankProgress(profile.xpPoints);
+
+  /** Progress ring toward the next milestone, in days sober. */
+  const RING_RADIUS = 52;
+  const circumference = 2 * Math.PI * RING_RADIUS;
+  const ringOffset = (() => {
     if (!nextMilestone) return 0;
-    const progress = Math.min(1, profile.currentStreak / nextMilestone.daysRequired);
-    const circumference = 2 * Math.PI * 52;
+    const progress = Math.min(1, daysSober / nextMilestone.daysRequired);
     return circumference - circumference * progress;
-  };
-
-  const getNextMilestone = (): MilestoneBadge | undefined => {
-    return badges.find((b) => !b.unlocked);
-  };
-
-  const triggerConfettiCelebration = () => {
-    confetti({
-      particleCount: 60,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#b45309', '#f59e0b', '#10b981', '#3b82f6']
-    });
-  };
+  })();
 
   const handleLogTrigger = (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,488 +105,349 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({ onOpenCrisis }) => {
 
     db.addTrigger({
       category: triggerCategory,
-      description: triggerDesc,
+      description: triggerDesc.trim(),
       intensity: triggerIntensity,
       resisted: true
     });
 
-    triggerConfettiCelebration();
+    audioEngine.playTaskCompleteChime();
+    audioEngine.triggerHaptic('success');
+    confetti({
+      particleCount: 60,
+      spread: 70,
+      origin: { y: 0.6 },
+      disableForReducedMotion: true
+    });
+
     setTriggerDesc('');
+    setTriggerIntensity(5);
     setShowTriggerForm(false);
   };
 
-  const circumference = 2 * Math.PI * 52;
-  const nextMilestone = getNextMilestone();
+  const archetypeEmoji =
+    profile.selectedArchetype === 'WOLF' ? '🐺' : profile.selectedArchetype === 'TIGER' ? '🐅' : '🦅';
+
+  const disciplines = [
+    { done: status.walkDone, icon: <Footprints size={13} />, label: 'GPS walk', detail: status.walkDone ? `${status.walkSteps.toLocaleString('en-IN')} steps` : 'Not yet' },
+    { done: status.focusDone, icon: <Clock size={13} />, label: 'Deep focus', detail: status.focusDone ? `${status.focusMinutes} min` : 'Not yet' },
+    { done: status.sleepDone, icon: <Moon size={13} />, label: 'Sleep', detail: status.sleepDone ? `${status.sleepHours}h` : 'Not logged' },
+    { done: status.routinesDone > 0, icon: <ListChecks size={13} />, label: 'Routine', detail: `${status.routinesDone}/${status.totalRoutines}` }
+  ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
-      
-      {/* ── Reference Top Header Bar ───────────────────────────────── */}
+    <div className="view-stack">
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="ref-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div className="ref-avatar-btn">
-            <span style={{ fontSize: '20px' }}>
-              {profile.selectedArchetype === 'WOLF' ? '🐺' : profile.selectedArchetype === 'TIGER' ? '🐅' : '🦅'}
-            </span>
+        <div className="ref-header-identity">
+          <div className="ref-avatar-btn" aria-hidden="true">
+            <span>{archetypeEmoji}</span>
           </div>
           <div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
-              Sobriety Shield
-            </div>
-            <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
-              {profile.displayName || 'Sovereign Warrior'}
-            </div>
+            <div className="ref-header-eyebrow">Sobriety shield</div>
+            <div className="ref-header-name">{profile.displayName || 'Warrior'}</div>
           </div>
         </div>
 
         <div className="ref-header-actions">
           <button
             className="ref-circle-btn ref-circle-btn-dark"
-            onClick={() => setShowTriggerForm(!showTriggerForm)}
-            title="Log Urge & Trigger"
-            aria-label="Log trigger"
+            onClick={() => setShowTriggerForm((v) => !v)}
+            aria-label="Log an urge"
+            aria-expanded={showTriggerForm}
           >
             <Plus size={18} />
           </button>
-          <div className="ref-circle-btn ref-circle-btn-light" title="Notifications">
+          <button
+            className="ref-circle-btn ref-circle-btn-light"
+            onClick={onOpenNotifications}
+            aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+          >
             <Bell size={18} />
-            <div className="ref-badge-dot" />
-          </div>
+            {unreadCount > 0 && <span className="ref-badge-dot" />}
+          </button>
         </div>
       </div>
 
-      {/* ── Page Title ─────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <h1 className="ref-page-title" style={{ margin: 0 }}>
-          Recovery Matrix
-        </h1>
-        <div className="md3-chip md3-chip-filled" style={{ gap: '4px', fontWeight: 800 }}>
-          <Zap size={13} color="var(--md-sys-color-primary)" />
-          <span>{profile.xpPoints} XP</span>
+      <div className="view-title-row">
+        <h1 className="ref-page-title">Recovery</h1>
+        <div className="md3-chip md3-chip-filled">
+          <Zap size={13} aria-hidden="true" />
+          <span>{profile.xpPoints.toLocaleString('en-IN')} XP</span>
         </div>
       </div>
 
-      {/* ── Dual-Tone Filter Chips Bar (Screen 1) ────────────────────── */}
-      <div className="ref-filter-bar">
+      {/* ── Filters ─────────────────────────────────────────────────────── */}
+      <div className="ref-filter-bar" role="tablist" aria-label="Recovery sections">
         <button
           className="ref-filter-icon-btn"
           onClick={() => setActiveFilter('ALL')}
-          title="Reset filter"
-          aria-label="Filter"
+          aria-label="Show everything"
         >
           <SlidersHorizontal size={16} />
         </button>
-
-        <button
-          type="button"
-          className={`ref-filter-pill ${activeFilter === 'ALL' ? 'active' : ''}`}
-          onClick={() => setActiveFilter('ALL')}
-        >
-          <span>All Overview</span>
-          <span className="ref-filter-count">{disciplinesStatus.monitoredDoneCount}/4</span>
-        </button>
-
-        <button
-          type="button"
-          className={`ref-filter-pill ${activeFilter === 'DISCIPLINES' ? 'active' : ''}`}
-          onClick={() => setActiveFilter('DISCIPLINES')}
-        >
-          <span>Disciplines</span>
-          <span className="ref-filter-count">{disciplinesStatus.monitoredDoneCount}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`ref-filter-pill ${activeFilter === 'BADGES' ? 'active' : ''}`}
-          onClick={() => setActiveFilter('BADGES')}
-        >
-          <span>Milestones</span>
-          <span className="ref-filter-count">{badges.filter((b) => b.unlocked).length}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`ref-filter-pill ${activeFilter === 'TRIGGERS' ? 'active' : ''}`}
-          onClick={() => setActiveFilter('TRIGGERS')}
-        >
-          <span>Triggers</span>
-          <span className="ref-filter-count">{triggers.length}</span>
-        </button>
+        {([
+          ['ALL', 'Overview', `${status.monitoredDoneCount}/4`],
+          ['DISCIPLINES', 'Today', String(status.monitoredDoneCount)],
+          ['BADGES', 'Milestones', String(unlockedBadges.length)],
+          ['TRIGGERS', 'Triggers', String(triggers.length)]
+        ] as Array<[RecoveryFilter, string, string]>).map(([key, label, count]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={activeFilter === key}
+            className={`ref-filter-pill ${activeFilter === key ? 'active' : ''}`}
+            onClick={() => setActiveFilter(key)}
+          >
+            <span>{label}</span>
+            <span className="ref-filter-count">{count}</span>
+          </button>
+        ))}
       </div>
 
-      {/* ── Inactivity Streak Reset Alert Notice ───────────────────── */}
+      {/* ── Streak lapse notice ─────────────────────────────────────────── */}
       {profile.streakResetReason && (
-        <div style={{
-          background: 'var(--md-sys-color-error-container)',
-          color: 'var(--md-sys-color-on-error-container)',
-          borderRadius: 'var(--md-sys-shape-medium)',
-          padding: '12px 16px',
-          fontSize: '12px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '8px',
-          fontWeight: 700
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <AlertTriangle size={16} />
-            <span>{profile.streakResetReason}</span>
-          </div>
+        <div className="notice notice-warning" role="status">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>{profile.streakResetReason}</span>
           <button
             type="button"
+            className="notice-dismiss"
             onClick={() => db.updateProfile({ streakResetReason: undefined })}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'inherit',
-              cursor: 'pointer',
-              fontWeight: 800,
-              padding: '4px 8px'
-            }}
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* ── Hero Streak Container Card (Fluid Modern Aura) ─────────── */}
+      {/* ── Hero: days sober ────────────────────────────────────────────── */}
       {(activeFilter === 'ALL' || activeFilter === 'DISCIPLINES') && (
-        <div className="ref-task-card ref-task-card-tinted" style={{ textAlign: 'center', padding: '24px 20px' }}>
-          <div style={{ position: 'relative', display: 'inline-block' }}>
-            <svg width="144" height="144" viewBox="0 0 120 120">
+        <div className="ref-task-card ref-task-card-tinted hero-card">
+          <div className="hero-ring">
+            <svg width="150" height="150" viewBox="0 0 120 120" role="img"
+                 aria-label={`${daysSober} days sober`}>
+              <circle cx="60" cy="60" r={RING_RADIUS} fill="none"
+                      stroke="currentColor" strokeOpacity="0.12" strokeWidth="8" />
               <circle
-                cx="60"
-                cy="60"
-                r="52"
-                fill="none"
-                stroke="rgba(0, 0, 0, 0.06)"
-                strokeWidth="8"
-              />
-              <circle
-                cx="60"
-                cy="60"
-                r="52"
-                fill="none"
-                stroke="var(--md-sys-color-on-primary-container)"
-                strokeWidth="8"
-                strokeLinecap="round"
+                cx="60" cy="60" r={RING_RADIUS} fill="none"
+                stroke="currentColor" strokeWidth="8" strokeLinecap="round"
                 strokeDasharray={circumference}
-                strokeDashoffset={computeRingProgress()}
+                strokeDashoffset={ringOffset}
                 transform="rotate(-90 60 60)"
-                style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.2, 0.0, 0.0, 1.0)' }}
+                className="hero-ring-progress"
               />
-              <text
-                x="60"
-                y="56"
-                textAnchor="middle"
-                fill="var(--md-sys-color-on-primary-container)"
-                style={{ fontFamily: 'var(--md-sys-typescale-display-large-font)', fontSize: '38px', fontWeight: 900 }}
-              >
-                {profile.currentStreak}
+              <text x="60" y="57" textAnchor="middle" className="hero-ring-value">
+                {daysSober}
               </text>
-              <text
-                x="60"
-                y="74"
-                textAnchor="middle"
-                fill="var(--md-sys-color-on-primary-container)"
-                opacity="0.85"
-                style={{ fontFamily: 'var(--md-sys-typescale-label-medium-font)', fontSize: '11px', fontWeight: 800 }}
-              >
-                DAYS SOBER
+              <text x="60" y="74" textAnchor="middle" className="hero-ring-label">
+                {daysSober === 1 ? 'DAY SOBER' : 'DAYS SOBER'}
               </text>
             </svg>
-
-            <span className="animate-flame" style={{
-              position: 'absolute',
-              bottom: '2px',
-              right: '2px',
-              fontSize: '30px'
-            }}>
-              🔥
-            </span>
           </div>
 
-          <div style={{ marginTop: '12px' }}>
-            <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--md-sys-color-on-primary-container)' }}>
-              Longest Record: <strong>{profile.longestStreak} days</strong> · Rank: <strong>{profile.warriorRank}</strong>
-            </p>
-
-            {nextMilestone && (
-              <p style={{ fontSize: '12px', fontWeight: 600, opacity: 0.85, marginTop: '4px' }}>
-                <Target size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
-                Next Milestone: {nextMilestone.title} ({nextMilestone.daysRequired - profile.currentStreak}d remaining)
-              </p>
+          <p className="hero-subline">
+            {profile.warriorRank}
+            {rank.nextTitle && (
+              <span className="hero-subline-muted">
+                {' '}· {rank.xpRemaining.toLocaleString('en-IN')} XP to {rank.nextTitle}
+              </span>
             )}
-          </div>
+          </p>
 
-          {/* Verification Checklist Badges */}
-          <div style={{
-            marginTop: '16px',
-            padding: '14px 16px',
-            background: 'rgba(255, 255, 255, 0.85)',
-            backdropFilter: 'blur(12px)',
-            borderRadius: '24px',
-            textAlign: 'left'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  background: isSecuredToday ? 'var(--md-sys-color-tertiary-container)' : 'var(--md-sys-color-error-container)',
-                  color: isSecuredToday ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-on-error-container)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}>
-                  {isSecuredToday ? <CheckCircle2 size={18} /> : <Flame size={18} />}
-                </div>
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: 800, color: isSecuredToday ? '#0f172a' : 'var(--md-sys-color-error)' }}>
-                    {isSecuredToday ? 'Streak Secured for Today! ✓' : 'Verification Pending'}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>
-                    {disciplinesStatus.monitoredDoneCount} of 4 verified disciplines complete.
-                  </div>
-                </div>
-              </div>
-            </div>
+          {nextMilestone ? (
+            <p className="hero-milestone">
+              <Target size={12} aria-hidden="true" />
+              Next: {nextMilestone.title} — {Math.max(0, nextMilestone.daysRequired - daysSober)} day
+              {nextMilestone.daysRequired - daysSober === 1 ? '' : 's'} to go
+            </p>
+          ) : (
+            <p className="hero-milestone">Every milestone unlocked. Extraordinary.</p>
+          )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '10px' }}>
-              <div style={{
-                padding: '6px 8px',
-                borderRadius: '12px',
-                background: disciplinesStatus.walkDone ? 'var(--md-sys-color-tertiary-container)' : 'rgba(0,0,0,0.03)',
-                color: disciplinesStatus.walkDone ? 'var(--md-sys-color-on-tertiary-container)' : '#64748b',
-                fontSize: '11px',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px'
-              }}>
-                <Footprints size={13} />
-                <span>Walk (3k steps) {disciplinesStatus.walkDone ? '✓' : ''}</span>
-              </div>
-
-              <div style={{
-                padding: '6px 8px',
-                borderRadius: '12px',
-                background: disciplinesStatus.focusDone ? 'var(--md-sys-color-tertiary-container)' : 'rgba(0,0,0,0.03)',
-                color: disciplinesStatus.focusDone ? 'var(--md-sys-color-on-tertiary-container)' : '#64748b',
-                fontSize: '11px',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px'
-              }}>
-                <Clock size={13} />
-                <span>30m Focus {disciplinesStatus.focusDone ? '✓' : ''}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Sub-tray: Striped progress bar */}
-          <div className="ref-card-tray" style={{ marginTop: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div className="ref-avatar-stack">
-                <div className="ref-avatar-stack-item">🦅</div>
-                <div className="ref-avatar-stack-item">🔥</div>
-              </div>
-              <span style={{ fontSize: '11px', fontWeight: 700 }}>
-                {disciplinesStatus.monitoredDoneCount}/4 Disciplines
-              </span>
-            </div>
-
-            <div className="ref-progress-striped">
+          {/* Today's disciplines */}
+          <div className="hero-today">
+            <div className="hero-today-head">
               <div
-                className="ref-progress-striped-fill"
-                style={{ width: `${Math.round((disciplinesStatus.monitoredDoneCount / 4) * 100)}%` }}
-              />
-              <span className="ref-progress-striped-text">
-                {isSecuredToday ? 'Streak Secured' : 'Extend Today'}
-              </span>
+                className={`hero-today-badge ${isSecuredToday ? 'secured' : 'pending'}`}
+                aria-hidden="true"
+              >
+                {isSecuredToday ? <CheckCircle2 size={18} /> : <Flame size={18} />}
+              </div>
+              <div>
+                <div className="hero-today-title">
+                  {isSecuredToday ? 'Today is secured' : 'Today is not secured yet'}
+                </div>
+                <div className="hero-today-sub">
+                  {status.monitoredDoneCount} of 4 disciplines ·{' '}
+                  {profile.currentStreak} day streak
+                </div>
+              </div>
             </div>
+
+            <div className="hero-discipline-grid">
+              {disciplines.map((d) => (
+                <div key={d.label} className={`hero-discipline ${d.done ? 'done' : ''}`}>
+                  {d.icon}
+                  <span className="hero-discipline-label">{d.label}</span>
+                  <span className="hero-discipline-detail">{d.detail}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="hero-actions">
+            <button type="button" className="md3-button-filled" onClick={onOpenCrisis}>
+              <ShieldCheck size={16} aria-hidden="true" />
+              Crisis shield
+            </button>
+            <button type="button" className="md3-button-text hero-relapse" onClick={onOpenRelapse}>
+              <RotateCcw size={14} aria-hidden="true" />
+              Log a relapse
+            </button>
           </div>
         </div>
       )}
 
-      {/* ── Milestone Badges Chamber ───────────────────────────────── */}
+      {/* ── Milestones ──────────────────────────────────────────────────── */}
       {(activeFilter === 'ALL' || activeFilter === 'BADGES') && (
         <div className="ref-task-card ref-task-card-light">
           <div className="ref-task-card-top">
-            <div className="ref-task-card-title">
-              Milestone Badges Chamber
-            </div>
-            <div className="ref-task-card-actions">
-              <span className="ref-task-review-badge">
-                {badges.filter((b) => b.unlocked).length}/{badges.length} Unlocked
-              </span>
-              <button
-                className="ref-arrow-btn"
-                onClick={() => {
-                  setActiveFilter(activeFilter === 'BADGES' ? 'ALL' : 'BADGES');
-                  audioEngine.triggerHaptic('light');
-                }}
-                aria-label="View badges"
-              >
-                <ArrowUpRight size={18} />
-              </button>
-            </div>
+            <div className="ref-task-card-title">Milestones</div>
+            <span className="ref-task-review-badge">
+              {unlockedBadges.length}/{badges.length} unlocked
+            </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+          <div className="badge-grid">
             {badges.map((badge) => (
               <div
                 key={badge.id}
-                title={badge.unlocked ? `${badge.title} — Unlocked!` : `${badge.title} (${badge.daysRequired}d required)`}
-                style={{
-                  textAlign: 'center',
-                  padding: '10px 4px',
-                  borderRadius: '16px',
-                  background: badge.unlocked
-                    ? 'var(--md-sys-color-secondary-container)'
-                    : '#f1f5f9',
-                  opacity: badge.unlocked ? 1 : 0.45,
-                  transition: 'all 0.2s ease'
-                }}
+                className={`badge-cell ${badge.unlocked ? 'unlocked' : ''}`}
+                title={
+                  badge.unlocked
+                    ? `${badge.title} — unlocked ${badge.unlockedAt}`
+                    : `${badge.title} — ${badge.daysRequired} days sober required`
+                }
               >
-                <div style={{ fontSize: '22px' }}>{badge.icon}</div>
-                <div style={{
-                  fontSize: '10px',
-                  fontWeight: 800,
-                  color: badge.unlocked ? 'var(--md-sys-color-on-secondary-container)' : '#64748b',
-                  marginTop: '4px'
-                }}>
-                  {badge.daysRequired}d
-                </div>
+                <div className="badge-icon" aria-hidden="true">{badge.icon}</div>
+                <div className="badge-days">{badge.daysRequired}d</div>
               </div>
             ))}
           </div>
+
+          {unlockedBadges.length === 0 && (
+            <p className="empty-hint">
+              Your first milestone unlocks after one full day. It is counted from your
+              sobriety start date, not from app activity.
+            </p>
+          )}
         </div>
       )}
 
-      {/* ── Subconscious Trigger Radar ─────────────────────────────── */}
+      {/* ── Trigger radar ───────────────────────────────────────────────── */}
       {(activeFilter === 'ALL' || activeFilter === 'TRIGGERS') && (
         <div className="ref-task-card ref-task-card-light">
           <div className="ref-task-card-top">
-            <div className="ref-task-card-title">
-              Subconscious Trigger Radar
-            </div>
-            <div className="ref-task-card-actions">
-              <button
-                type="button"
-                className="md3-button-tonal md3-button-sm"
-                onClick={() => setShowTriggerForm(!showTriggerForm)}
-              >
-                <Plus size={14} />
-                Log
-              </button>
-            </div>
+            <div className="ref-task-card-title">Trigger radar</div>
+            <button
+              type="button"
+              className="md3-button-tonal md3-button-sm"
+              onClick={() => setShowTriggerForm((v) => !v)}
+            >
+              <Plus size={14} aria-hidden="true" />
+              Log
+            </button>
           </div>
 
-          {/* Inline trigger logging form */}
           {showTriggerForm && (
-            <form
-              onSubmit={handleLogTrigger}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-                padding: '14px',
-                background: '#f8fafc',
-                borderRadius: '18px',
-                marginBottom: '10px'
-              }}
-            >
+            <form onSubmit={handleLogTrigger} className="inline-form">
               <div>
-                <label className="md3-field-label">Trigger Domain:</label>
+                <label className="md3-field-label" htmlFor="trigger-domain">Trigger</label>
                 <select
+                  id="trigger-domain"
                   className="md3-select"
                   value={triggerCategory}
                   onChange={(e) => setTriggerCategory(e.target.value as TriggerCategory)}
                 >
-                  <option value="STRESS">Stress & Anxiety</option>
-                  <option value="FATIGUE">Late Night Fatigue</option>
-                  <option value="APP">App / Algorithmic Feed</option>
-                  <option value="EMOTION">Boredom & Emotional Dip</option>
-                  <option value="SOCIAL">Social Pressure</option>
-                  <option value="LOCATION">Environment / Location</option>
-                  <option value="TIME">Time of Day Habit Loop</option>
+                  {TRIGGER_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="md3-field-label">Trigger Context:</label>
+                <label className="md3-field-label" htmlFor="trigger-context">What happened?</label>
                 <input
+                  id="trigger-context"
                   type="text"
                   required
                   className="md3-field-outlined"
                   value={triggerDesc}
                   onChange={(e) => setTriggerDesc(e.target.value)}
-                  placeholder="e.g. Late night endless doomscrolling..."
+                  placeholder="Scrolling late at night"
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
-                  Urge Intensity: <strong>{triggerIntensity}/10</strong>
-                </span>
+              <div className="range-row">
+                <label className="md3-field-label" htmlFor="trigger-intensity">
+                  Intensity: <strong>{triggerIntensity}/10</strong>
+                </label>
                 <input
+                  id="trigger-intensity"
                   type="range"
-                  min="1"
-                  max="10"
+                  min={1}
+                  max={10}
                   value={triggerIntensity}
-                  onChange={(e) => setTriggerIntensity(parseInt(e.target.value))}
-                  style={{ width: '120px' }}
+                  onChange={(e) => setTriggerIntensity(Number(e.target.value))}
                 />
               </div>
 
-              <button type="submit" className="md3-button-filled md3-button-md" style={{ marginTop: '4px', fontWeight: 800 }}>
-                <ShieldCheck size={16} />
-                Log Urge & Resist (+50 XP)
+              <button type="submit" className="md3-button-filled">
+                <ShieldCheck size={16} aria-hidden="true" />
+                Log as resisted
               </button>
             </form>
           )}
 
-          {/* Triggers Log Summary */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {triggers.slice(0, 3).map((trig) => (
-              <div
-                key={trig.id}
-                style={{
-                  padding: '12px 14px',
-                  borderRadius: '16px',
-                  background: '#f8fafc',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span className="md3-chip" style={{ height: '20px', fontSize: '9px', padding: '0 6px', background: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}>
-                      {trig.category}
-                    </span>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>
-                      Intensity {trig.intensity}/10
-                    </span>
+          {triggers.length === 0 ? (
+            <p className="empty-hint">
+              Nothing logged yet. Recording an urge — resisted or not — is what makes the
+              pattern visible in your analytics later.
+            </p>
+          ) : (
+            <div className="trigger-list">
+              {triggers.slice(0, 5).map((trig) => (
+                <div key={trig.id} className="trigger-row">
+                  <div className="trigger-row-main">
+                    <div className="trigger-row-meta">
+                      <span className={`md3-chip trigger-chip ${trig.resisted ? '' : 'not-resisted'}`}>
+                        {trig.category}
+                      </span>
+                      <span className="trigger-intensity">Intensity {trig.intensity}/10</span>
+                    </div>
+                    <div className="trigger-row-desc">{trig.description}</div>
                   </div>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a', marginTop: '4px' }}>
-                    {trig.description}
+                  <div className={`trigger-outcome ${trig.resisted ? 'resisted' : 'not-resisted'}`}>
+                    {trig.resisted ? 'Resisted' : 'Relapse'}
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
 
-                <div style={{ color: 'var(--md-sys-color-tertiary)', fontWeight: 800, fontSize: '11px' }}>
-                  Resisted ✓
-                </div>
-              </div>
-            ))}
-          </div>
+          {triggers.length > 5 && (
+            <button
+              type="button"
+              className="md3-button-text card-more"
+              onClick={() => setActiveFilter('TRIGGERS')}
+            >
+              {triggers.length - 5} more
+              <ArrowUpRight size={14} aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
-
     </div>
   );
 };

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 11 and below (android:fullBackupContent).
+
+    Sovereign Eagle holds sobriety history, relapse records, private journals
+    and client income. None of it leaves the device via Auto Backup. Backup is
+    disabled outright in the manifest; this file is the belt-and-braces rule
+    set in case allowBackup is ever re-enabled.
+-->
+<full-backup-content>
+    <exclude domain="database" />
+    <exclude domain="sharedpref" />
+    <exclude domain="file" />
+    <exclude domain="root" />
+    <exclude domain="external" />
+</full-backup-content>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    colors.xml — Sovereign Eagle brand palette (light).
+
+    These three names are required by values/styles.xml. AppCompat exposes
+    colorPrimary/colorPrimaryDark/colorAccent as theme ATTRIBUTES, never as
+    color resources, so they must be declared here or resource linking fails.
+-->
+<resources>
+    <!-- Brand: amber sovereign -->
+    <color name="colorPrimary">#B45309</color>
+    <color name="colorPrimaryDark">#78350F</color>
+    <color name="colorAccent">#F59E0B</color>
+
+    <!-- Window / splash ground -->
+    <color name="windowBackground">#F8FAFC</color>
+    <color name="splashBackground">#18181B</color>
+
+    <!-- App widget surfaces -->
+    <color name="widgetSurface">#FFFFFF</color>
+    <color name="widgetOnSurface">#0F172A</color>
+    <color name="widgetOnSurfaceVariant">#64748B</color>
+    <color name="widgetAmberContainer">#FEF3C7</color>
+    <color name="widgetOnAmberContainer">#78350F</color>
+    <color name="widgetGreenContainer">#DCFCE7</color>
+    <color name="widgetOnGreenContainer">#14532D</color>
+    <color name="widgetOutline">#E2E8F0</color>
+    <color name="widgetErrorContainer">#F9DEDC</color>
+    <color name="widgetOnErrorContainer">#B3261E</color>
+</resources>

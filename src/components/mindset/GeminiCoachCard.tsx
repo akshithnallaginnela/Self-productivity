@@ -13,20 +13,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
-  Bot,
   Send,
   RefreshCw,
   Key,
-  ShieldCheck,
-  ChevronRight,
-  Flame,
   CheckCircle2,
   Volume2,
   VolumeX,
-  Target,
-  Zap,
-  Award,
-  AlertTriangle
+  Target
 } from 'lucide-react';
 import { db } from '../../services/db';
 import { geminiService } from '../../services/geminiService';

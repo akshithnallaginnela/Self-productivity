@@ -1,161 +1,122 @@
 /**
- * AndroidShell.tsx — App Shell & Edge-to-Edge Device Frame
+ * AndroidShell.tsx — app frame and layout.
  *
- * This is the root layout component that orchestrates:
- *   1. StatusBar — transparent, overlays scrollable content
- *   2. Content Area — scrolls edge-to-edge behind the status bar
- *   3. Crisis FAB — extended floating action button (error variant)
- *   4. NavigationBar — official M3 80dp bottom nav
- *   5. GestureBar — transparent gesture handle
- *   6. Viewport switcher — toggle Pixel 8 frame vs. adaptive fluid
- *
- * The shell detects scroll position and passes it to StatusBar
- * so the status bar can gain a frosted glass effect when content
- * has scrolled beneath it.
+ * On a device this is a plain edge-to-edge container. The Pixel-8 chassis and
+ * the "Pixel 8 / Fluid" viewport switcher are browser-preview scaffolding and
+ * are not rendered on native — shipping them inside the APK put a fake device
+ * bezel and a developer toolbar on top of the real UI.
  */
 
 import React, { useState, useRef, useCallback } from 'react';
-import { ShieldAlert, Smartphone, Maximize2, LayoutGrid } from 'lucide-react';
+import { ShieldAlert, Smartphone, Maximize2 } from 'lucide-react';
 import { NavigationTab } from '../../types';
+import { androidSystem } from '../../services/androidSystem';
 import { StatusBar } from './StatusBar';
 import { NavigationBar } from './NavigationBar';
 import { GestureBar } from './GestureBar';
 
 interface AndroidShellProps {
-  /** The currently rendered view content */
   children: React.ReactNode;
-  /** Currently active navigation tab */
   activeTab: NavigationTab;
-  /** Callback to change the active tab */
   setActiveTab: (tab: NavigationTab) => void;
-  /** Opens the crisis intervention modal */
   onOpenCrisis: () => void;
-  /** Opens the warrior profile modal */
   onOpenProfile: () => void;
 }
 
-/**
- * Renders the complete Android device shell with edge-to-edge rendering.
- * Content draws behind the transparent status bar and above the M3 nav bar.
- */
 export const AndroidShell: React.FC<AndroidShellProps> = ({
   children,
   activeTab,
   setActiveTab,
   onOpenCrisis,
-  onOpenProfile,
+  onOpenProfile
 }) => {
-  /** Tracks whether user is in phone-frame mode or full-screen fluid mode */
-  const [isPhoneFrame, setIsPhoneFrame] = useState<boolean>(true);
+  const isNative = androidSystem.isNative;
 
-  /** Tracks scroll position to toggle frosted status bar glass effect */
-  const [isScrolled, setIsScrolled] = useState<boolean>(false);
-
-  /** Ref to the scroll container for detecting scroll position */
+  /** Browser preview only: phone chassis vs. full-bleed. */
+  const [isPhoneFrame, setIsPhoneFrame] = useState(true);
+  const [isScrolled, setIsScrolled] = useState(false);
   const scrollRef = useRef<HTMLElement>(null);
 
   /**
-   * Handles scroll events on the content area.
-   * When the user scrolls more than 8px, the status bar gains
-   * a frosted glass backdrop to maintain readability.
+   * Scroll listener, throttled to one state update per animation frame.
+   * Unthrottled, this fired setState on every scroll event.
    */
+  const scrollTicking = useRef(false);
   const handleScroll = useCallback(() => {
-    if (scrollRef.current) {
-      setIsScrolled(scrollRef.current.scrollTop > 8);
-    }
+    if (scrollTicking.current) return;
+    scrollTicking.current = true;
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (el) setIsScrolled(el.scrollTop > 8);
+      scrollTicking.current = false;
+    });
   }, []);
 
-  /**
-   * Handles tab navigation. When switching to 'widgets', we go
-   * to the home screen widget deck. Otherwise, navigate to the tab.
-   */
   const handleTabChange = (tab: NavigationTab) => {
     setActiveTab(tab);
-    // Scroll content back to top on tab switch
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  /**
-   * Toggles between the widget deck home screen and the last
-   * active app tab view.
-   */
-  const handleWidgetToggle = () => {
-    if (activeTab === 'widgets') {
-      setActiveTab('recovery');
-    } else {
-      setActiveTab('widgets');
-    }
-  };
+  const showChrome = activeTab !== 'start';
+  const frameClasses = [
+    'android-device-frame',
+    isNative ? 'native-mode' : !isPhoneFrame ? 'fluid-mode' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <div className="app-viewport-wrapper" style={!isPhoneFrame ? { padding: 0 } : undefined}>
-      {/* ── Viewport Switcher Toolbar (floats above everything) ────────── */}
-      <div className="viewport-toolbar">
-        <button
-          className={`viewport-toolbar-btn ${isPhoneFrame ? 'active' : ''}`}
-          onClick={() => setIsPhoneFrame(true)}
-          aria-label="Pixel 8 phone frame view"
-        >
-          <Smartphone size={13} />
-          Pixel 8
-        </button>
-        <button
-          className={`viewport-toolbar-btn ${!isPhoneFrame ? 'active' : ''}`}
-          onClick={() => setIsPhoneFrame(false)}
-          aria-label="Adaptive fluid full-screen view"
-        >
-          <Maximize2 size={13} />
-          Fluid
-        </button>
-      </div>
+    <div className={`app-viewport-wrapper ${isNative ? 'native-mode' : ''}`}>
+      {/* Preview-only viewport switcher. Never rendered inside the APK. */}
+      {!isNative && (
+        <div className="viewport-toolbar">
+          <button
+            className={`viewport-toolbar-btn ${isPhoneFrame ? 'active' : ''}`}
+            onClick={() => setIsPhoneFrame(true)}
+            aria-pressed={isPhoneFrame}
+          >
+            <Smartphone size={13} aria-hidden="true" />
+            Phone
+          </button>
+          <button
+            className={`viewport-toolbar-btn ${!isPhoneFrame ? 'active' : ''}`}
+            onClick={() => setIsPhoneFrame(false)}
+            aria-pressed={!isPhoneFrame}
+          >
+            <Maximize2 size={13} aria-hidden="true" />
+            Full
+          </button>
+        </div>
+      )}
 
-      {/* ── Device Frame ─────────────────────────────────────────────── */}
-      <div className={`android-device-frame ${!isPhoneFrame ? 'fluid-mode' : ''}`}>
+      <div className={frameClasses}>
+        {showChrome && <StatusBar isScrolled={isScrolled} onOpenProfile={onOpenProfile} />}
 
-        {/* Transparent edge-to-edge status bar */}
-        <StatusBar
-          isScrolled={isScrolled}
-          onOpenProfile={onOpenProfile}
-        />
-
-        {/* ── Scrollable Content Area (edge-to-edge) ────────────────── */}
-        <main
-          ref={scrollRef}
-          className="app-content-area"
-          onScroll={handleScroll}
-        >
-          {/* Container transform wrapper for tab transitions */}
+        <main ref={scrollRef} className="app-content-area" onScroll={handleScroll}>
           <div key={activeTab} className="view-enter">
             {children}
           </div>
         </main>
 
-        {/* ── Extended Crisis FAB (above nav bar) ────────────────────── */}
-        {activeTab !== 'widgets' && activeTab !== 'start' && (
+        {/* Crisis FAB — hidden on the widget deck and during onboarding. */}
+        {showChrome && activeTab !== 'widgets' && (
           <div className="crisis-fab">
             <button
               className="md3-fab-extended md3-fab-error"
               onClick={onOpenCrisis}
-              aria-label="Activate Crisis Shield — 10 second urge delay"
+              aria-label="Open the crisis shield"
             >
-              <ShieldAlert size={20} />
-              <span>SOS Shield</span>
+              <ShieldAlert size={20} aria-hidden="true" />
+              <span>SOS</span>
             </button>
           </div>
         )}
 
-        {/* ── Floating Navigation Dock (hidden during start onboarding) ── */}
-        {activeTab !== 'start' && (
-          <NavigationBar
-            activeTab={activeTab === 'widgets' ? 'recovery' : activeTab}
-            onTabChange={handleTabChange}
-          />
-        )}
+        {showChrome && <NavigationBar activeTab={activeTab} onTabChange={handleTabChange} />}
 
-        {/* ── Gesture Navigation Handle (transparent) ────────────────── */}
-        <GestureBar />
+        {/* Gesture handle: only meaningful in the browser mock. Android draws
+            its own, and duplicating it wastes 20dp of real screen. */}
+        {!isNative && showChrome && <GestureBar />}
       </div>
     </div>
   );

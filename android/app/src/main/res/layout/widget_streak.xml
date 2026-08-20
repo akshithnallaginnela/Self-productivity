@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Sobriety Shield 4x2.
+
+    The literal values below are the placeholders shown for the instant between
+    a widget being dropped on the home screen and its first onUpdate. They are
+    therefore ZEROED, never demo data — StreakWidgetProvider overwrites every
+    one of them from SharedPreferences.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_streak_root"
     android:layout_width="match_parent"
@@ -14,9 +22,10 @@
         android:gravity="center_vertical">
 
         <TextView
+            android:id="@+id/widget_streak_emoji"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🦅"
+            android:text="@string/widget_emoji_eagle"
             android:textSize="22sp" />
 
         <LinearLayout
@@ -29,32 +38,36 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="SOBRIETY SHIELD"
+                android:text="@string/widget_streak_label"
                 android:textSize="10sp"
                 android:textStyle="bold"
-                android:textColor="#705B40" />
+                android:textColor="@color/widgetOnAmberContainer" />
 
             <TextView
                 android:id="@+id/widget_warrior_rank"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Tier III Sovereign"
+                android:text="@string/widget_rank_empty"
                 android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="#1D1B20" />
+                android:textColor="@color/widgetOnSurface" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/widget_btn_sos"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🚨 SOS"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:text="@string/widget_sos"
             android:textSize="11sp"
             android:textStyle="bold"
-            android:textColor="#B3261E"
-            android:background="#F9DEDC"
+            android:textColor="@color/widgetOnErrorContainer"
+            android:background="@color/widgetErrorContainer"
             android:paddingHorizontal="10dp"
-            android:paddingVertical="4dp" />
+            android:paddingVertical="4dp"
+            android:contentDescription="@string/widget_sos_description" />
     </LinearLayout>
 
     <LinearLayout
@@ -81,19 +94,19 @@
                     android:id="@+id/widget_streak_days"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="21"
+                    android:text="@string/widget_zero"
                     android:textSize="40sp"
                     android:textStyle="bold"
-                    android:textColor="#1D1B20"
+                    android:textColor="@color/widgetOnSurface"
                     android:includeFontPadding="false" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text=" DAYS SOBER"
+                    android:text="@string/widget_days_sober"
                     android:textSize="13sp"
                     android:textStyle="bold"
-                    android:textColor="#705B40"
+                    android:textColor="@color/widgetOnAmberContainer"
                     android:layout_marginStart="4dp"
                     android:layout_marginBottom="4dp" />
             </LinearLayout>
@@ -102,16 +115,17 @@
                 android:id="@+id/widget_streak_subtext"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Longest: 21d · +3450 XP"
+                android:text="@string/widget_streak_empty"
                 android:textSize="11sp"
-                android:textColor="#49454F"
+                android:textColor="@color/widgetOnSurfaceVariant"
                 android:layout_marginTop="2dp" />
         </LinearLayout>
 
         <TextView
+            android:id="@+id/widget_streak_flame"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🔥"
+            android:text="@string/widget_emoji_flame"
             android:textSize="32sp" />
     </LinearLayout>
 </LinearLayout>

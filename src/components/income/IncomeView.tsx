@@ -21,16 +21,21 @@ import {
   Target,
   X,
   Calculator,
-  IndianRupee
+  IndianRupee,
+  Bell
 } from 'lucide-react';
 import { IncomeEntry, IncomeSource, UserProfile } from '../../types';
 import { db } from '../../services/db';
 import { formatINR, calculateIncomeForecast } from '../../services/forecastEngine';
 
+interface IncomeViewProps {
+  onOpenNotifications?: () => void;
+}
+
 /**
  * Renders the Material Design 3 Freelance Income dashboard.
  */
-export const IncomeView: React.FC = () => {
+export const IncomeView: React.FC<IncomeViewProps> = ({ onOpenNotifications }) => {
   const [profile, setProfile] = useState<UserProfile>(db.getProfile());
   const [entries, setEntries] = useState<IncomeEntry[]>(db.getIncomeEntries());
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -108,10 +113,15 @@ export const IncomeView: React.FC = () => {
           >
             <Plus size={18} />
           </button>
-          <div className="ref-circle-btn ref-circle-btn-light" title="Notifications">
-            <span style={{ fontSize: '14px' }}>₹</span>
+          <button
+            className="ref-circle-btn ref-circle-btn-light"
+            onClick={onOpenNotifications}
+            title="Notification Center"
+            aria-label="Open notifications"
+          >
+            <Bell size={18} />
             <div className="ref-badge-dot" />
-          </div>
+          </button>
         </div>
       </div>
 
@@ -206,14 +216,14 @@ export const IncomeView: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Briefcase size={15} color="var(--md-sys-color-primary)" />
             <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
-              Proposal Win Rate
+              Collection Rate
             </span>
           </div>
           <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)', marginTop: '4px' }}>
-            28.5% Closed
+            {entries.length > 0 ? `${Math.round((entries.filter((e) => e.isPaid).length / entries.length) * 100)}% Realized` : '100% Realized'}
           </div>
           <div style={{ fontSize: '10px', color: 'var(--md-sys-color-on-surface-variant)', marginTop: '2px' }}>
-            4 Won / 14 Sent
+            {entries.filter((e) => e.isPaid).length} Paid / {entries.length} Sprints ({new Set(entries.map((e) => e.clientName)).size} Clients)
           </div>
         </div>
 

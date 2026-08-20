@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Freelance Forge 2x2. Placeholders are zeroed; ForgeWidgetProvider overwrites them. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_forge_root"
     android:layout_width="match_parent"
@@ -17,19 +18,19 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="FORGE ₹"
+            android:text="@string/widget_forge_label"
             android:textSize="10sp"
             android:textStyle="bold"
-            android:textColor="#00658F" />
+            android:textColor="@color/widgetOnSurfaceVariant" />
 
         <TextView
             android:id="@+id/widget_forge_percent"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="73% Pace"
+            android:text="@string/widget_pace_empty"
             android:textSize="10sp"
             android:textStyle="bold"
-            android:textColor="#00658F" />
+            android:textColor="@color/widgetOnSurfaceVariant" />
     </LinearLayout>
 
     <LinearLayout
@@ -40,27 +41,29 @@
         android:orientation="vertical">
 
         <TextView
+            android:id="@+id/widget_forge_month"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Aug Realized"
+            android:text="@string/widget_forge_month"
             android:textSize="10sp"
-            android:textColor="#4E616D" />
+            android:textColor="@color/widgetOnSurfaceVariant" />
 
         <TextView
             android:id="@+id/widget_forge_amount"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="₹87,500"
+            android:text="@string/widget_amount_empty"
             android:textSize="18sp"
             android:textStyle="bold"
-            android:textColor="#1D1B20"
+            android:textColor="@color/widgetOnSurface"
             android:layout_marginTop="2dp" />
     </LinearLayout>
 
     <TextView
+        android:id="@+id/widget_forge_goal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Goal: ₹1,20,000"
+        android:text="@string/widget_goal_empty"
         android:textSize="9sp"
-        android:textColor="#4E616D" />
+        android:textColor="@color/widgetOnSurfaceVariant" />
 </LinearLayout>

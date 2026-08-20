@@ -40,3 +40,7 @@ coverage/
 # Misc
 *.tgz
 .cache/
+# Android release signing (never commit)
+android/keystore.properties
+*.jks
+*.keystore

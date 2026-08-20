@@ -1,21 +1,13 @@
 /**
- * NavigationBar.tsx — Floating Dark Navigation Dock
+ * NavigationBar.tsx — floating bottom navigation dock.
  *
- * Implements the floating capsule navigation dock from the reference design:
- *   - Suspended floating dark pill dock
- *   - Active white pill container with active green indicator dot
- *   - Touch-optimized icons with haptic feedback transitions
+ * Six destinations, including the glance deck. The deck used to be reachable
+ * only through a function that was never called, which left the whole view
+ * dead in the shipped app.
  */
 
 import React from 'react';
-import {
-  Home,
-  CheckSquare,
-  IndianRupee,
-  Sparkles,
-  BarChart3,
-  Calendar
-} from 'lucide-react';
+import { Home, CheckSquare, IndianRupee, Sparkles, BarChart3, LayoutGrid } from 'lucide-react';
 import { NavigationTab } from '../../types';
 
 interface NavDestination {
@@ -30,35 +22,33 @@ interface NavigationBarProps {
 }
 
 const DESTINATIONS: NavDestination[] = [
-  { id: 'recovery', label: 'Home', icon: <Home size={20} /> },
-  { id: 'routine',  label: 'Habits', icon: <CheckSquare size={20} /> },
-  { id: 'income',   label: 'Forge', icon: <IndianRupee size={20} /> },
-  { id: 'mindset',  label: 'Mindset', icon: <Sparkles size={20} /> },
-  { id: 'analytics', label: 'Matrix', icon: <BarChart3 size={20} /> },
+  { id: 'recovery', label: 'Recovery', icon: <Home size={20} /> },
+  { id: 'routine', label: 'Habits', icon: <CheckSquare size={20} /> },
+  { id: 'income', label: 'Income', icon: <IndianRupee size={20} /> },
+  { id: 'mindset', label: 'Mindset', icon: <Sparkles size={20} /> },
+  { id: 'analytics', label: 'Insights', icon: <BarChart3 size={20} /> },
+  { id: 'widgets', label: 'Glance', icon: <LayoutGrid size={20} /> }
 ];
 
-export const NavigationBar: React.FC<NavigationBarProps> = ({ activeTab, onTabChange }) => {
-  return (
-    <div className="ref-bottom-dock-wrapper">
-      <nav className="ref-bottom-dock" aria-label="Main floating navigation dock">
-        {DESTINATIONS.map((dest) => {
-          const isActive = activeTab === dest.id;
-          return (
-            <button
-              key={dest.id}
-              className={`ref-dock-btn ${isActive ? 'active' : ''}`}
-              onClick={() => onTabChange(dest.id)}
-              aria-label={dest.label}
-              aria-current={isActive ? 'page' : undefined}
-              title={dest.label}
-            >
-              {isActive && <div className="ref-dock-active-dot" />}
-              {dest.icon}
-            </button>
-          );
-        })}
-      </nav>
-    </div>
-  );
-};
-
+export const NavigationBar: React.FC<NavigationBarProps> = ({ activeTab, onTabChange }) => (
+  <div className="ref-bottom-dock-wrapper">
+    <nav className="ref-bottom-dock" aria-label="Main navigation">
+      {DESTINATIONS.map((dest) => {
+        const isActive = activeTab === dest.id;
+        return (
+          <button
+            key={dest.id}
+            className={`ref-dock-btn ${isActive ? 'active' : ''}`}
+            onClick={() => onTabChange(dest.id)}
+            aria-label={dest.label}
+            aria-current={isActive ? 'page' : undefined}
+            title={dest.label}
+          >
+            {isActive && <span className="ref-dock-active-dot" aria-hidden="true" />}
+            {dest.icon}
+          </button>
+        );
+      })}
+    </nav>
+  </div>
+);

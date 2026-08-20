@@ -1,396 +1,275 @@
 /**
- * StartView.tsx — Main Start & Launch Onboarding Screen
+ * StartView.tsx — onboarding.
  *
- * Implements the personalized application launch & onboarding intake:
- *   1. Sovereign Eagle Logo & Brand Hero Presentation
- *   2. Personalized User Profile Information Intake (Akshith):
- *      - Warrior Call-Sign & Identity
- *      - Spirit Mindset Archetype Selection (Eagle / Wolf / Tiger)
- *      - Monthly Freelance Income Goal in INR (₹)
- *      - Sobriety Anchor Start Date & Streak Record
- *      - Core Disciplines Configuration
- *      - Optional 4-Digit Local Privacy Security PIN
- *   3. "Ignite Sovereign System" CTA with triumph chime, haptics & confetti
+ * Starts everyone at zero. The one place a non-zero number can enter is the
+ * sobriety anchor, and only because the user states it themselves: someone who
+ * is genuinely 40 days clean should not have to throw that away to use the app.
+ * That sets `sobrietyStartDate` — it does not fabricate a streak, XP or income.
  */
 
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  Sparkles,
   Shield,
   Target,
-  Zap,
   CheckCircle2,
   Lock,
   ArrowRight,
-  Flame,
-  Clock,
-  Footprints,
-  Moon,
-  Sun,
   IndianRupee,
-  ShieldCheck
+  CalendarClock,
+  AlertTriangle
 } from 'lucide-react';
-import { Archetype, UserProfile } from '../../types';
-import { db } from '../../services/db';
+import { Archetype } from '../../types';
+import { db, toDateKey } from '../../services/db';
+import { createPinCredentials, validatePinFormat, markUnlocked } from '../../services/appLock';
 import { audioEngine } from '../../services/audioEngine';
+import { notificationService } from '../../services/notificationService';
 import { AppLogo } from './AppLogo';
 
 interface StartViewProps {
-  /** Callback fired when user completes intake and enters the dashboard */
   onComplete: () => void;
 }
 
+const ARCHETYPES: Array<{ value: Archetype; emoji: string; label: string; blurb: string }> = [
+  { value: 'EAGLE', emoji: '🦅', label: 'Eagle', blurb: 'Perspective. Rise above the noise.' },
+  { value: 'WOLF', emoji: '🐺', label: 'Wolf', blurb: 'Loyalty. Discipline when nobody is watching.' },
+  { value: 'TIGER', emoji: '🐅', label: 'Tiger', blurb: 'Precision. Stillness, then decisive action.' }
+];
+
+const INCOME_PRESETS = [50_000, 100_000, 150_000, 200_000];
+
 export const StartView: React.FC<StartViewProps> = ({ onComplete }) => {
-  const currentProfile = db.getProfile();
+  const existing = db.getProfile();
 
-  /* ── Form state initialized with Akshith's parameters ───────────── */
-  const [displayName, setDisplayName] = useState<string>(currentProfile.displayName || 'Akshith');
-  const [archetype, setArchetype] = useState<Archetype>(currentProfile.selectedArchetype || 'EAGLE');
-  const [targetIncome, setTargetIncome] = useState<number>(currentProfile.targetMonthlyIncome || 150000);
-  const [customIncome, setCustomIncome] = useState<string>(currentProfile.targetMonthlyIncome.toString());
-  const [currentStreak, setCurrentStreak] = useState<number>(currentProfile.currentStreak || 21);
-  const [pin, setPin] = useState<string>(currentProfile.pin || '');
-  const [selectedDisciplines, setSelectedDisciplines] = useState<{ [key: string]: boolean }>({
-    wake: true,
-    walk: true,
-    focus: true,
-    sleep: true
-  });
+  const [displayName, setDisplayName] = useState(existing.displayName);
+  const [archetype, setArchetype] = useState<Archetype>(existing.selectedArchetype);
+  const [incomeTarget, setIncomeTarget] = useState(
+    existing.targetMonthlyIncome > 0 ? String(existing.targetMonthlyIncome) : ''
+  );
 
-  const handleIncomePreset = (amount: number) => {
-    setTargetIncome(amount);
-    setCustomIncome(amount.toString());
-    audioEngine.triggerHaptic('light');
-  };
+  /** Days already clean before installing. Defaults to 0 — today is day zero. */
+  const [priorDays, setPriorDays] = useState('0');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleArchetypeSelect = (arch: Archetype) => {
-    setArchetype(arch);
-    db.setArchetype(arch);
+  const handleArchetype = (a: Archetype) => {
+    setArchetype(a);
+    db.setArchetype(a);
     audioEngine.triggerHaptic('medium');
   };
 
-  const toggleDiscipline = (key: string) => {
-    setSelectedDisciplines((prev) => ({ ...prev, [key]: !prev[key] }));
-    audioEngine.triggerHaptic('light');
-  };
-
-  const handleIgnite = (e: React.FormEvent) => {
+  const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
-    const parsedIncome = parseFloat(customIncome);
-    const finalIncome = isNaN(parsedIncome) || parsedIncome <= 0 ? 150000 : parsedIncome;
+    const priorDaysNum = priorDays.trim() === '' ? 0 : Number(priorDays);
+    if (!Number.isInteger(priorDaysNum) || priorDaysNum < 0 || priorDaysNum > 20_000) {
+      setError('Days already clean must be a whole number of days.');
+      return;
+    }
 
-    // Persist completed setup into local database
+    const incomeNum = incomeTarget.trim() === '' ? 0 : Number(incomeTarget);
+    if (!Number.isFinite(incomeNum) || incomeNum < 0) {
+      setError('Enter a valid monthly target, or leave it blank.');
+      return;
+    }
+
+    let pinFields: { pinHash?: string; pinSalt?: string; isLockEnabled?: boolean } = {};
+    if (pin.trim()) {
+      const formatError = validatePinFormat(pin.trim());
+      if (formatError) {
+        setError(formatError);
+        return;
+      }
+      try {
+        setIsSubmitting(true);
+        pinFields = { ...(await createPinCredentials(pin.trim())), isLockEnabled: true };
+        markUnlocked();
+      } catch (err) {
+        setIsSubmitting(false);
+        setError(err instanceof Error ? err.message : 'Could not set a PIN on this device.');
+        return;
+      }
+    }
+
+    // Backdate the anchor by the days the user says they already have.
+    const anchor = new Date();
+    anchor.setDate(anchor.getDate() - priorDaysNum);
+
     db.updateProfile({
-      displayName: displayName.trim() || 'Akshith',
+      displayName: displayName.trim(),
       selectedArchetype: archetype,
-      targetMonthlyIncome: finalIncome,
-      currentStreak: currentStreak > 0 ? currentStreak : 1,
-      pin: pin ? pin.trim() : undefined,
-      isOnboardingCompleted: true
+      targetMonthlyIncome: incomeNum,
+      sobrietyStartDate: anchor.toISOString(),
+      isOnboardingCompleted: true,
+      lastLoginDate: toDateKey(),
+      lastRolloverDate: toDateKey(),
+      // Explicitly zero: nothing is earned before the app is used.
+      currentStreak: 0,
+      longestStreak: 0,
+      xpPoints: 0,
+      tasksCompletedToday: 0,
+      lastStreakExtendedDate: undefined,
+      ...pinFields
     });
 
     db.setArchetype(archetype);
+    // Any milestone already covered by the stated clean period unlocks now.
+    db.evaluateBadges();
+    void notificationService.scheduleDailyReminders();
 
-    // Audio & celebratory visual effects
     audioEngine.playMilestoneTriumph();
     audioEngine.triggerHaptic('success');
-    confetti({
-      particleCount: 75,
-      spread: 75,
-      origin: { y: 0.5 },
-      colors: ['#b45309', '#f59e0b', '#10b981', '#3b82f6']
-    });
+    confetti({ particleCount: 70, spread: 75, origin: { y: 0.5 }, disableForReducedMotion: true });
 
+    setIsSubmitting(false);
     onComplete();
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%', paddingBottom: '24px' }}>
-      
-      {/* ── Brand Hero Header ──────────────────────────────────────── */}
-      <div style={{ textAlign: 'center', padding: '16px 8px 8px 8px' }}>
-        <div style={{ position: 'relative', display: 'inline-block', marginBottom: '8px' }}>
-          <AppLogo size={88} variant="badge" animated={true} />
+    <form className="onboarding" onSubmit={handleStart}>
+      <header className="onboarding-hero">
+        <AppLogo size={80} variant="badge" animated />
+        <h1>Sovereign Eagle</h1>
+        <p>Sobriety, discipline and freelance income — tracked entirely on this device.</p>
+      </header>
+
+      {/* Name */}
+      <section className="onboarding-card">
+        <label className="md3-field-label" htmlFor="onb-name">What should the app call you?</label>
+        <input
+          id="onb-name"
+          type="text"
+          className="md3-field-outlined"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="Your name or a call-sign"
+          autoComplete="given-name"
+        />
+      </section>
+
+      {/* Archetype */}
+      <section className="onboarding-card">
+        <span className="md3-field-label">Choose an archetype</span>
+        <p className="onboarding-hint">It sets the app&apos;s colour palette and coaching voice.</p>
+        <div className="archetype-grid" role="radiogroup" aria-label="Archetype">
+          {ARCHETYPES.map((a) => (
+            <button
+              type="button"
+              key={a.value}
+              role="radio"
+              aria-checked={archetype === a.value}
+              className={`archetype-card ${archetype === a.value ? 'selected' : ''}`}
+              onClick={() => handleArchetype(a.value)}
+            >
+              <span className="archetype-emoji" aria-hidden="true">{a.emoji}</span>
+              <span className="archetype-name">{a.label}</span>
+              <span className="archetype-blurb">{a.blurb}</span>
+            </button>
+          ))}
         </div>
+      </section>
 
-        <h1 style={{
-          fontFamily: 'var(--md-sys-typescale-display-large-font)',
-          fontSize: '28px',
-          fontWeight: 900,
-          letterSpacing: '-0.5px',
-          color: '#0f172a',
-          margin: '4px 0 2px 0'
-        }}>
-          SOVEREIGN EAGLE
-        </h1>
-
-        <p style={{ fontSize: '13px', fontWeight: 600, color: '#64748b', margin: 0 }}>
-          Personal Discipline, Sobriety Shield & Monetary Forge
+      {/* Sobriety anchor */}
+      <section className="onboarding-card">
+        <label className="md3-field-label" htmlFor="onb-prior">
+          <CalendarClock size={14} aria-hidden="true" /> How long have you been clean?
+        </label>
+        <p className="onboarding-hint">
+          Leave this at 0 to start from today. If you already have a run behind you, enter it —
+          your counter will reflect the truth rather than restarting.
         </p>
-
-        {/* Personalized Dedicated Badge */}
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: 'var(--md-sys-color-primary-container)',
-          color: 'var(--md-sys-color-on-primary-container)',
-          padding: '4px 14px',
-          borderRadius: '9999px',
-          fontSize: '10px',
-          fontWeight: 800,
-          letterSpacing: '0.8px',
-          textTransform: 'uppercase',
-          marginTop: '10px'
-        }}>
-          <Sparkles size={12} />
-          <span>Crafted Exclusively for Akshith</span>
-        </div>
-      </div>
-
-      {/* ── Personalized Warrior Intake Form ───────────────────────── */}
-      <form onSubmit={handleIgnite} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        
-        {/* 1. Warrior Identity */}
-        <div className="ref-task-card ref-task-card-light" style={{ padding: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <Shield size={18} color="var(--md-sys-color-primary)" />
-            <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
-              1. Warrior Identity & Spirit
-            </span>
-          </div>
-
-          <div>
-            <label className="md3-field-label">Warrior Call-Sign / Name:</label>
-            <input
-              type="text"
-              required
-              className="md3-field-outlined"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="e.g. Akshith"
-              style={{ fontSize: '15px', fontWeight: 800, borderRadius: '16px' }}
-            />
-          </div>
-
-          <div style={{ marginTop: '12px' }}>
-            <label className="md3-field-label">Select Spirit Archetype:</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-              {[
-                { id: 'EAGLE' as Archetype, name: 'Eagle', emoji: '🦅', desc: 'High-Altitude' },
-                { id: 'WOLF' as Archetype, name: 'Wolf', emoji: '🐺', desc: 'Silent Pack' },
-                { id: 'TIGER' as Archetype, name: 'Tiger', emoji: '🐅', desc: 'Savage Speed' }
-              ].map((item) => {
-                const isSelected = archetype === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleArchetypeSelect(item.id)}
-                    style={{
-                      padding: '10px 6px',
-                      borderRadius: '16px',
-                      border: isSelected ? '2px solid var(--md-sys-color-primary)' : '1px solid #e2e8f0',
-                      background: isSelected ? 'var(--md-sys-color-primary-container)' : '#f8fafc',
-                      color: isSelected ? 'var(--md-sys-color-on-primary-container)' : '#334155',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '3px',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    <span style={{ fontSize: '22px' }}>{item.emoji}</span>
-                    <span style={{ fontSize: '12px', fontWeight: 800 }}>{item.name}</span>
-                    <span style={{ fontSize: '9px', opacity: 0.75 }}>{item.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* 2. Monthly Monetary Forge Target */}
-        <div className="ref-task-card ref-task-card-light" style={{ padding: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <IndianRupee size={18} color="var(--md-sys-color-primary)" />
-            <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
-              2. Monthly Income Target (₹)
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-            {[100000, 150000, 200000].map((amt) => {
-              const isSelected = targetIncome === amt;
-              return (
-                <button
-                  key={amt}
-                  type="button"
-                  onClick={() => handleIncomePreset(amt)}
-                  className={`ref-filter-pill ${isSelected ? 'active' : ''}`}
-                  style={{ flex: 1, justifyContent: 'center', height: '34px', fontSize: '11px' }}
-                >
-                  ₹{(amt / 1000).toLocaleString('en-IN')}k/mo
-                </button>
-              );
-            })}
-          </div>
-
-          <div>
-            <label className="md3-field-label">Custom Target in INR (₹):</label>
-            <input
-              type="number"
-              required
-              className="md3-field-outlined"
-              value={customIncome}
-              onChange={(e) => {
-                setCustomIncome(e.target.value);
-                const num = parseFloat(e.target.value);
-                if (!isNaN(num)) setTargetIncome(num);
-              }}
-              placeholder="e.g. 150000"
-              style={{ fontSize: '16px', fontWeight: 800, borderRadius: '16px' }}
-            />
-          </div>
-        </div>
-
-        {/* 3. Sobriety Anchor & Current Streak */}
-        <div className="ref-task-card ref-task-card-tinted" style={{ padding: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-            <Flame size={18} color="var(--md-sys-color-primary)" />
-            <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--md-sys-color-on-primary-container)' }}>
-              3. Sobriety Shield Anchor
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 700 }}>
-                Current Sobriety Record
-              </div>
-              <div style={{ fontSize: '10px', opacity: 0.85 }}>
-                Days sober prior to today
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
-                type="number"
-                min="0"
-                className="md3-field-outlined"
-                value={currentStreak}
-                onChange={(e) => setCurrentStreak(parseInt(e.target.value) || 0)}
-                style={{ width: '80px', height: '40px', textAlign: 'center', fontSize: '16px', fontWeight: 900, borderRadius: '14px' }}
-              />
-              <span style={{ fontSize: '13px', fontWeight: 800 }}>Days</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 4. Core Daily Disciplines */}
-        <div className="ref-task-card ref-task-card-light" style={{ padding: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <Zap size={18} color="var(--md-sys-color-primary)" />
-            <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
-              4. Daily Monitored Disciplines
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {[
-              { key: 'wake', name: '5:30 AM Sovereign Wakeup & Sunlight', icon: <Sun size={15} color="#d97706" /> },
-              { key: 'walk', name: '3km Outdoor GPS Walk & Movement', icon: <Footprints size={15} color="#16a34a" /> },
-              { key: 'focus', name: '30m Monitored Deep Work (40Hz Gamma)', icon: <Clock size={15} color="#2563eb" /> },
-              { key: 'sleep', name: 'Circadian Sleep & Wind-Down Sync', icon: <Moon size={15} color="#4f46e5" /> }
-            ].map((item) => {
-              const isChecked = selectedDisciplines[item.key];
-              return (
-                <div
-                  key={item.key}
-                  onClick={() => toggleDiscipline(item.key)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 12px',
-                    borderRadius: '14px',
-                    background: isChecked ? 'var(--md-sys-color-primary-container)' : '#f8fafc',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {item.icon}
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>
-                      {item.name}
-                    </span>
-                  </div>
-                  <div style={{
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '6px',
-                    background: isChecked ? 'var(--md-sys-color-primary)' : 'transparent',
-                    border: isChecked ? 'none' : '2px solid #cbd5e1',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff'
-                  }}>
-                    {isChecked && <CheckCircle2 size={14} />}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 5. Local Security PIN */}
-        <div className="ref-task-card ref-task-card-light" style={{ padding: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <Lock size={18} color="var(--md-sys-color-primary)" />
-            <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
-              5. Local Privacy Master PIN (Optional)
-            </span>
-          </div>
-
-          <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '10px' }}>
-            100% offline client-side security lock for your private data logs.
-          </p>
-
+        <div className="prior-days-row">
           <input
-            type="password"
-            maxLength={6}
+            id="onb-prior"
+            type="number"
+            inputMode="numeric"
+            min={0}
             className="md3-field-outlined"
-            value={pin}
-            onChange={(e) => setPin(e.target.value)}
-            placeholder="e.g. 1234"
-            style={{ fontSize: '16px', letterSpacing: '4px', textAlign: 'center', borderRadius: '16px' }}
+            value={priorDays}
+            onChange={(e) => setPriorDays(e.target.value)}
           />
+          <span className="prior-days-unit">days</span>
         </div>
+        <p className="onboarding-note">
+          <Shield size={13} aria-hidden="true" />
+          This sets your sobriety date only. Streak, XP and milestones all start at zero and
+          are earned from here.
+        </p>
+      </section>
 
-        {/* ── Ignite Sovereign System CTA Button ─────────────────────── */}
-        <button
-          type="submit"
-          className="md3-button-filled md3-button-lg"
-          style={{
-            width: '100%',
-            height: '56px',
-            fontSize: '16px',
-            fontWeight: 900,
-            letterSpacing: '0.4px',
-            boxShadow: '0 8px 24px -4px rgba(180, 83, 9, 0.4)',
-            marginTop: '8px'
-          }}
-        >
-          <Sparkles size={20} />
-          <span>Ignite Sovereign System 🦅</span>
-          <ArrowRight size={20} />
-        </button>
+      {/* Income target */}
+      <section className="onboarding-card">
+        <label className="md3-field-label" htmlFor="onb-income">
+          <IndianRupee size={14} aria-hidden="true" /> Monthly income target (optional)
+        </label>
+        <div className="preset-row">
+          {INCOME_PRESETS.map((amount) => (
+            <button
+              type="button"
+              key={amount}
+              className={`preset-chip ${incomeTarget === String(amount) ? 'selected' : ''}`}
+              onClick={() => {
+                setIncomeTarget(String(amount));
+                audioEngine.triggerHaptic('light');
+              }}
+            >
+              ₹{(amount / 1000).toFixed(0)}k
+            </button>
+          ))}
+        </div>
+        <input
+          id="onb-income"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          className="md3-field-outlined"
+          value={incomeTarget}
+          onChange={(e) => setIncomeTarget(e.target.value)}
+          placeholder="Or type an amount — leave blank to skip"
+        />
+      </section>
 
-      </form>
-    </div>
+      {/* Optional PIN */}
+      <section className="onboarding-card">
+        <label className="md3-field-label" htmlFor="onb-pin">
+          <Lock size={14} aria-hidden="true" /> App lock (optional)
+        </label>
+        <p className="onboarding-hint">
+          A 4-8 digit PIN, required each time the app opens. Only a salted hash is stored,
+          never the PIN itself.
+        </p>
+        <input
+          id="onb-pin"
+          type="password"
+          inputMode="numeric"
+          autoComplete="new-password"
+          maxLength={8}
+          className="md3-field-outlined pin-field"
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+          placeholder="Leave blank for no lock"
+        />
+      </section>
+
+      {error && (
+        <div className="notice notice-error" role="alert">
+          <AlertTriangle size={15} aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <button type="submit" className="md3-button-filled onboarding-cta" disabled={isSubmitting}>
+        <Target size={18} aria-hidden="true" />
+        {isSubmitting ? 'Setting up…' : 'Start'}
+        <ArrowRight size={18} aria-hidden="true" />
+      </button>
+
+      <p className="onboarding-footer">
+        <CheckCircle2 size={13} aria-hidden="true" />
+        Nothing is uploaded. Cloud backup is switched off at the Android level.
+      </p>
+    </form>
   );
 };

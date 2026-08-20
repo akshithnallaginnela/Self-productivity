@@ -1,129 +1,185 @@
 /**
- * widgetBridge.ts — Native Android Home Screen Widget Sync Bridge
+ * widgetBridge.ts — pushes app state to the native Android home-screen widgets.
  *
- * Bridges the React/TypeScript local database state to native Android
- * AppWidgets (`AppWidgetProvider`).
+ * On a device this calls the WidgetBridge Capacitor plugin, which writes to
+ * SharedPreferences and broadcasts an AppWidgetManager update. In a browser it
+ * is a no-op beyond caching the payload.
  *
- * When built into an Android APK, this service writes streak, habit, and income
- * metrics into Android `SharedPreferences` and triggers `AppWidgetManager` broadcast
- * intents so the user's phone home screen widgets update instantaneously!
- *
- * When running in the browser / PWA preview, it syncs with the in-app
- * Android 14 Glance Widget Deck (`WidgetDeck.tsx`).
+ * The sobriety anchor is sent as an epoch timestamp rather than a precomputed
+ * day count, so StreakWidgetProvider can roll the number over at midnight by
+ * itself without the app being launched.
  */
 
 import { UserProfile, RoutineTask, IncomeEntry } from '../types';
 import { calculateIncomeForecast } from './forecastEngine';
 
-/** Data payload synced to Android SharedPreferences for Native Widgets */
+/** Payload mirrored into Android SharedPreferences. */
 export interface NativeWidgetPayload {
-  // Sobriety Shield Widget (4x2)
+  // Sobriety Shield (4x2)
+  sobrietyStartEpochMs: string; // string: epoch ms overflows a Java int
   streakDays: number;
   longestStreak: number;
   xpPoints: number;
   warriorRank: string;
   archetype: string;
-  
-  // Habits Widget (2x2)
+  streakSecuredToday: boolean;
+
+  // Habits (2x2)
   habitsCompleted: number;
   totalHabits: number;
   habitPercentage: number;
   nextHabitName: string;
-  nextHabitId: string;
 
-  // Freelance Forge Widget (2x2)
+  // Freelance Forge (2x2)
   currentMonthIncome: number;
   targetIncome: number;
   incomeProgressPercent: number;
-  currencySymbol: string;
 
   lastUpdatedAt: string;
 }
 
-/**
- * Native Android Widget Bridge Service
- */
-class NativeWidgetBridge {
-  private isNative: boolean = false;
+interface WidgetBridgeNativePlugin {
+  updateWidgets: (data: NativeWidgetPayload) => Promise<void>;
+  consumePendingAction: () => Promise<{ action: string }>;
+  addListener: (
+    eventName: 'widgetAction',
+    handler: (data: { action: string }) => void
+  ) => Promise<{ remove: () => Promise<void> }>;
+}
 
-  constructor() {
-    // Check if running inside Capacitor Android native shell
-    this.isNative = typeof (window as unknown as { Capacitor?: { isNativePlatform: () => boolean } }).Capacitor?.isNativePlatform === 'function' &&
-      (window as unknown as { Capacitor: { isNativePlatform: () => boolean } }).Capacitor.isNativePlatform();
+interface CapacitorGlobal {
+  isNativePlatform?: () => boolean;
+  Plugins?: { WidgetBridge?: WidgetBridgeNativePlugin };
+}
+
+const capacitor = (): CapacitorGlobal | undefined =>
+  typeof window === 'undefined'
+    ? undefined
+    : (window as unknown as { Capacitor?: CapacitorGlobal }).Capacitor;
+
+/** True when running inside the Android shell rather than a browser. */
+export const isNativePlatform = (): boolean => {
+  const cap = capacitor();
+  return typeof cap?.isNativePlatform === 'function' && cap.isNativePlatform();
+};
+
+const CACHE_KEY = 'rw_native_widget_payload_v2';
+
+class NativeWidgetBridge {
+  /** Last payload sent, used to skip redundant native round-trips. */
+  private lastSerialized: string | null = null;
+
+  private plugin(): WidgetBridgeNativePlugin | undefined {
+    return capacitor()?.Plugins?.WidgetBridge;
   }
 
   /**
-   * Syncs latest app state to Android Native SharedPreferences and notifies AppWidgetManager.
-   *
-   * @param {UserProfile} profile Active user profile
-   * @param {RoutineTask[]} routines Daily habit routines
-   * @param {IncomeEntry[]} incomeEntries Realized income ledger
+   * Builds the payload from current state and pushes it natively.
+   * Skips the bridge call entirely when nothing the widgets display has changed.
    */
   public async syncToNativeWidgets(
     profile: UserProfile,
     routines: RoutineTask[],
-    incomeEntries: IncomeEntry[]
+    incomeEntries: IncomeEntry[],
+    streakSecuredToday: boolean
   ): Promise<void> {
-    const completedCount = routines.filter(r => r.completed).length;
-    const habitPercent = Math.round((completedCount / Math.max(1, routines.length)) * 100);
-    const nextIncomplete = routines.find(r => !r.completed);
+    const completedCount = routines.filter((r) => r.completed).length;
+    const nextIncomplete = routines
+      .slice()
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .find((r) => !r.completed);
     const forecast = calculateIncomeForecast(incomeEntries, profile.targetMonthlyIncome);
 
+    const sobrietyStartMs = profile.isOnboardingCompleted
+      ? new Date(profile.sobrietyStartDate).getTime()
+      : 0;
+
     const payload: NativeWidgetPayload = {
+      sobrietyStartEpochMs: String(Number.isFinite(sobrietyStartMs) ? sobrietyStartMs : 0),
       streakDays: profile.currentStreak,
       longestStreak: profile.longestStreak,
       xpPoints: profile.xpPoints,
       warriorRank: profile.warriorRank,
       archetype: profile.selectedArchetype,
+      streakSecuredToday,
 
       habitsCompleted: completedCount,
       totalHabits: routines.length,
-      habitPercentage: habitPercent,
-      nextHabitName: nextIncomplete ? nextIncomplete.name : 'All Done! ⚡',
-      nextHabitId: nextIncomplete ? nextIncomplete.id : '',
+      habitPercentage:
+        routines.length === 0 ? 0 : Math.round((completedCount / routines.length) * 100),
+      nextHabitName: nextIncomplete ? nextIncomplete.name : '',
 
-      currentMonthIncome: forecast.currentMonthTotal,
-      targetIncome: profile.targetMonthlyIncome,
+      currentMonthIncome: Math.round(forecast.currentMonthTotal),
+      targetIncome: Math.round(profile.targetMonthlyIncome),
       incomeProgressPercent: forecast.targetProgressPercent,
-      currencySymbol: '₹',
 
       lastUpdatedAt: new Date().toISOString()
     };
 
-    // Store in browser localStorage for web preview sync
-    localStorage.setItem('rw_native_widget_payload', JSON.stringify(payload));
+    // Compare everything except the timestamp, which always differs.
+    const { lastUpdatedAt: _ignored, ...comparable } = payload;
+    const serialized = JSON.stringify(comparable);
+    if (serialized === this.lastSerialized) return;
+    this.lastSerialized = serialized;
 
-    // If running in Native Android APK container, broadcast to Android Native Widget Plugin
-    if (this.isNative) {
-      try {
-        const capacitorWindow = window as unknown as {
-          Capacitor?: {
-            Plugins?: {
-              WidgetBridge?: {
-                updateWidgets: (data: NativeWidgetPayload) => Promise<void>;
-              };
-            };
-          };
-        };
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+    } catch {
+      /* cache is a convenience; a failure here must not break the sync */
+    }
 
-        if (capacitorWindow.Capacitor?.Plugins?.WidgetBridge) {
-          await capacitorWindow.Capacitor.Plugins.WidgetBridge.updateWidgets(payload);
-          console.log('[NativeWidgetBridge] Successfully broadcasted update to Android AppWidgets');
-        }
-      } catch (err) {
-        console.warn('[NativeWidgetBridge] Failed to dispatch native Android widget update:', err);
-      }
+    const plugin = this.plugin();
+    if (!plugin) return; // browser / PWA — nothing native to update
+
+    try {
+      await plugin.updateWidgets(payload);
+    } catch (err) {
+      console.warn('[widgetBridge] Native widget update failed:', err);
     }
   }
 
   /**
-   * Retrieves the cached widget payload.
+   * Subscribes to home-screen widget taps. Returns an unsubscribe function.
+   *
+   * Two delivery paths are needed: `addListener` catches taps while the app is
+   * running, and `consumePendingAction` drains an action that arrived during a
+   * cold start, before this listener existed.
    */
+  public async onWidgetAction(handler: (action: string) => void): Promise<() => void> {
+    const plugin = this.plugin();
+    if (!plugin) return () => {};
+
+    let removeListener: (() => Promise<void>) | null = null;
+
+    try {
+      const handle = await plugin.addListener('widgetAction', ({ action }) => {
+        if (action) handler(action);
+      });
+      removeListener = handle.remove;
+    } catch (err) {
+      console.warn('[widgetBridge] Could not attach widget listener:', err);
+    }
+
+    try {
+      const pending = await plugin.consumePendingAction();
+      if (pending?.action) handler(pending.action);
+    } catch {
+      /* no pending action, or plugin unavailable */
+    }
+
+    return () => {
+      void removeListener?.();
+    };
+  }
+
   public getCachedPayload(): NativeWidgetPayload | null {
-    const raw = localStorage.getItem('rw_native_widget_payload');
-    return raw ? JSON.parse(raw) : null;
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      return raw ? (JSON.parse(raw) as NativeWidgetPayload) : null;
+    } catch {
+      return null;
+    }
   }
 }
 
-/** Singleton instance exported for use across database mutations */
 export const widgetBridge = new NativeWidgetBridge();

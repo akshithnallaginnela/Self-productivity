@@ -15,6 +15,7 @@
  */
 
 import { SoundscapeTrack } from '../types';
+import { androidSystem } from './androidSystem';
 
 /** Soundscape catalog configuration */
 export const SOUNDSCAPE_TRACKS: SoundscapeTrack[] = [
@@ -297,29 +298,12 @@ class WebAudioEngine {
   }
 
   /**
-   * Triggers native device haptic vibration feedback when available.
+   * Haptic feedback. Kept on the audio engine because most call sites pair a
+   * chime with a buzz, but the single implementation lives in androidSystem —
+   * this used to be a duplicated copy of the same vibration patterns.
    */
   public triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'success' = 'light'): void {
-    try {
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        switch (type) {
-          case 'light':
-            navigator.vibrate(15);
-            break;
-          case 'medium':
-            navigator.vibrate([20, 30, 20]);
-            break;
-          case 'heavy':
-            navigator.vibrate([35, 40, 35]);
-            break;
-          case 'success':
-            navigator.vibrate([15, 30, 45, 30, 60]);
-            break;
-        }
-      }
-    } catch {
-      // Haptics unavailable on desktop
-    }
+    androidSystem.triggerHaptic(type);
   }
 
   /**

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- colors.xml (night) — dark-mode overrides for the same names. -->
+<resources>
+    <color name="colorPrimary">#F59E0B</color>
+    <color name="colorPrimaryDark">#18181B</color>
+    <color name="colorAccent">#FBBF24</color>
+
+    <color name="windowBackground">#121212</color>
+    <color name="splashBackground">#18181B</color>
+
+    <color name="widgetSurface">#1F1F22</color>
+    <color name="widgetOnSurface">#F1F5F9</color>
+    <color name="widgetOnSurfaceVariant">#A1A1AA</color>
+    <color name="widgetAmberContainer">#3A2A10</color>
+    <color name="widgetOnAmberContainer">#FCD34D</color>
+    <color name="widgetGreenContainer">#14301F</color>
+    <color name="widgetOnGreenContainer">#86EFAC</color>
+    <color name="widgetOutline">#2E2E33</color>
+    <color name="widgetErrorContainer">#3B1F1D</color>
+    <color name="widgetOnErrorContainer">#F2B8B5</color>
+</resources>

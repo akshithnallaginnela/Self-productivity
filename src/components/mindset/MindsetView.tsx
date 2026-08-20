@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Play, Square, Volume2, BookOpen, Send, Compass, Sparkles, RefreshCw } from 'lucide-react';
+import { Play, Square, Volume2, BookOpen, Send, Sparkles, RefreshCw } from 'lucide-react';
 import { Archetype, JournalEntry, UserProfile } from '../../types';
 import { db } from '../../services/db';
 import { audioEngine, SOUNDSCAPE_TRACKS } from '../../services/audioEngine';
@@ -35,7 +35,11 @@ const ARCHETYPE_PROMPTS: Record<Archetype, string[]> = {
   ]
 };
 
-export const MindsetView: React.FC = () => {
+interface MindsetViewProps {
+  onOpenNotifications?: () => void;
+}
+
+export const MindsetView: React.FC<MindsetViewProps> = ({ onOpenNotifications }) => {
   const [profile, setProfile] = useState<UserProfile>(db.getProfile());
   const [journals, setJournals] = useState<JournalEntry[]>(db.getJournals());
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
@@ -147,10 +151,15 @@ export const MindsetView: React.FC = () => {
           >
             <Sparkles size={18} />
           </button>
-          <div className="ref-circle-btn ref-circle-btn-light" title="Notifications">
+          <button
+            className="ref-circle-btn ref-circle-btn-light"
+            onClick={onOpenNotifications}
+            title="Notification Center"
+            aria-label="Open notifications"
+          >
             <span style={{ fontSize: '12px', fontWeight: 800 }}>AI</span>
             <div className="ref-badge-dot" />
-          </div>
+          </button>
         </div>
       </div>
 

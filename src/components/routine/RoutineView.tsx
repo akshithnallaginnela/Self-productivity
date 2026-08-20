@@ -1,170 +1,204 @@
 /**
- * RoutineView.tsx — Task Schedule & Monitored Discipline Engine
+ * RoutineView.tsx — daily checklist, focus block, walk and sleep.
  *
- * Implements the pixel-perfect layout and organization from the reference design:
- *   1. Task Schedule Header with Date picker dropdown & quick action button
- *   2. Interactive S M T W T F S Calendar Grid with circular date tokens & completion rings
- *   3. Dual-tone filter chips bar ([ All | 8 ], [ Morning | 4 ], [ Evening | 4 ], etc.)
- *   4. Reference card anatomy with bold titles, ↗ action buttons, clock time spans,
- *      priority capsule pills, avatar stacks, and striped progress bars.
- *   5. Full Habit Manager (Add custom routines, delete, toggle completion, sequential order checks).
- *   6. Monitored Focus with Screen WakeLock, GPS Walk, Sleep, and Ritual engines.
+ * Two corrections over the previous version:
+ *
+ * 1. THE CALENDAR IS REAL. It renders the actual current month, with the 1st
+ *    under its true weekday, and marks days from stored history. It previously
+ *    drew a fixed 1-31 grid starting under "S" and marked every even-numbered
+ *    past day complete via `day % 2 === 0`.
+ *
+ * 2. THE FOCUS TIMER IS WALL-CLOCK. Remaining time is derived from a start
+ *    timestamp, so backgrounding the app no longer loses minutes — Android
+ *    throttles timers in hidden WebViews, and the old tick-counting loop
+ *    silently under-counted every session where the screen went off.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Sun,
   Moon,
-  Flame,
   Play,
   Pause,
   RotateCcw,
   CheckCircle2,
   AlertCircle,
-  Footprints,
-  Sparkles,
-  Zap,
-  Target,
   Clock,
   ArrowUpRight,
   SlidersHorizontal,
-  Calendar as CalendarIcon,
-  ChevronDown,
-  Pencil,
   Bell,
   Plus,
   Trash2,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { RoutineTask, FocusSession, UserProfile } from '../../types';
-import { db } from '../../services/db';
+import { db, toDateKey } from '../../services/db';
 import { audioEngine } from '../../services/audioEngine';
 import { androidSystem } from '../../services/androidSystem';
+import { notificationService } from '../../services/notificationService';
 import { GpsWalkTracker } from './GpsWalkTracker';
 import { SleepTrackerCard } from './SleepTrackerCard';
 
 type RoutineFilter = 'ALL' | 'MORNING' | 'EVENING' | 'FOCUS' | 'WALK' | 'SLEEP';
 
-export const RoutineView: React.FC = () => {
+interface RoutineViewProps {
+  onOpenNotifications?: () => void;
+}
+
+const FOCUS_PRESETS = [15, 25, 30, 45];
+const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+export const RoutineView: React.FC<RoutineViewProps> = ({ onOpenNotifications }) => {
   const [profile, setProfile] = useState<UserProfile>(db.getProfile());
   const [routines, setRoutines] = useState<RoutineTask[]>(db.getRoutines());
-  const [orderWarning, setOrderWarning] = useState<string | null>(null);
-  const [disciplinesStatus, setDisciplinesStatus] = useState(db.getTodayDisciplinesStatus());
+  const [status, setStatus] = useState(db.getTodayDisciplinesStatus());
+  const [history, setHistory] = useState(db.getDailyEntries());
+  const [unreadCount, setUnreadCount] = useState(notificationService.getUnreadCount());
+
   const [activeFilter, setActiveFilter] = useState<RoutineFilter>('ALL');
-  const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
+  const [orderWarning, setOrderWarning] = useState<string | null>(null);
+  const warningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /* ── Add Custom Habit Modal state ────────────────────────────────── */
-  const [showAddHabitModal, setShowAddHabitModal] = useState<boolean>(false);
-  const [newHabitName, setNewHabitName] = useState<string>('');
-  const [newHabitCategory, setNewHabitCategory] = useState<'MORNING' | 'EVENING' | 'CUSTOM'>('MORNING');
-  const [newHabitTimeHint, setNewHabitTimeHint] = useState<string>('07:00 AM');
-  const [newHabitDuration, setNewHabitDuration] = useState<number>(15);
+  /* ── Add-habit dialog ─────────────────────────────────────────────────── */
+  const [showAddHabit, setShowAddHabit] = useState(false);
+  const [newHabitName, setNewHabitName] = useState('');
+  const [newHabitCategory, setNewHabitCategory] = useState<RoutineTask['category']>('MORNING');
+  const [newHabitTime, setNewHabitTime] = useState('07:00 AM');
+  const [newHabitDuration, setNewHabitDuration] = useState(15);
 
-  /* ── 30-min Monitored Focus Engine state ─────────────────────────── */
-  const [focusTargetMinutes, setFocusTargetMinutes] = useState<number>(30);
-  const [focusSecondsRemaining, setFocusSecondsRemaining] = useState<number>(30 * 60);
-  const [isFocusActive, setIsFocusActive] = useState<boolean>(false);
-  const [focusCompletedToday, setFocusCompletedToday] = useState<boolean>(false);
+  /* ── Focus timer (wall-clock) ─────────────────────────────────────────── */
+  const [focusTargetMinutes, setFocusTargetMinutes] = useState(30);
+  const [focusEndsAt, setFocusEndsAt] = useState<number | null>(null);
+  const [focusRemaining, setFocusRemaining] = useState(30 * 60);
 
-  /** Subscribes to reactive database updates. */
-  useEffect(() => {
-    const unsub = db.subscribe(() => {
-      setProfile(db.getProfile());
-      setRoutines(db.getRoutines());
-      const status = db.getTodayDisciplinesStatus();
-      setDisciplinesStatus(status);
-      setFocusCompletedToday(status.focusDone);
-    });
-    return () => unsub();
+  const refresh = useCallback(() => {
+    setProfile(db.getProfile());
+    setRoutines(db.getRoutines());
+    setStatus(db.getTodayDisciplinesStatus());
+    setHistory(db.getDailyEntries());
   }, []);
 
+  useEffect(() => db.subscribe(refresh), [refresh]);
+  useEffect(
+    () =>
+      notificationService.subscribe((list) =>
+        setUnreadCount(list.filter((n) => !n.isRead).length)
+      ),
+    []
+  );
+  useEffect(
+    () => () => {
+      if (warningTimer.current) clearTimeout(warningTimer.current);
+    },
+    []
+  );
+
   /**
-   * Monitored Focus timer countdown loop with Screen WakeLock.
+   * Ticks the display and detects completion. Remaining time is recomputed
+   * from `focusEndsAt` each tick rather than decremented, so a throttled or
+   * skipped tick costs nothing.
    */
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    if (isFocusActive && focusSecondsRemaining > 0) {
-      timer = setInterval(() => setFocusSecondsRemaining((prev) => prev - 1), 1000);
-    } else if (focusSecondsRemaining === 0 && isFocusActive) {
-      setIsFocusActive(false);
-      audioEngine.stop();
-      audioEngine.playMilestoneTriumph();
-      audioEngine.triggerHaptic('success');
-      androidSystem.releaseWakeLock();
-      confetti({
-        particleCount: 50,
-        spread: 60,
-        origin: { y: 0.6 }
-      });
+    if (focusEndsAt === null) return;
 
-      const session: FocusSession = {
-        id: `focus-${Date.now()}`,
-        date: new Date().toISOString().split('T')[0],
-        targetMinutes: focusTargetMinutes,
-        completedMinutes: focusTargetMinutes,
-        completed: true,
-        timestamp: new Date().toISOString(),
-        soundTrack: 'track-gamma'
-      };
-      db.saveFocusSession(session);
-    }
-    return () => {
-      clearInterval(timer);
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((focusEndsAt - Date.now()) / 1000));
+      setFocusRemaining(remaining);
+
+      if (remaining === 0) {
+        setFocusEndsAt(null);
+        audioEngine.stop();
+        audioEngine.playMilestoneTriumph();
+        audioEngine.triggerHaptic('success');
+        androidSystem.releaseWakeLock();
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 }, disableForReducedMotion: true });
+
+        const session: FocusSession = {
+          id: `focus-${Date.now()}`,
+          date: toDateKey(),
+          targetMinutes: focusTargetMinutes,
+          completedMinutes: focusTargetMinutes,
+          completed: true,
+          timestamp: new Date().toISOString(),
+          soundTrack: 'track-gamma'
+        };
+        db.saveFocusSession(session);
+        void notificationService.sendImmediateNotification(
+          'Focus block complete',
+          `${focusTargetMinutes} minutes done.`,
+          'FOCUS'
+        );
+      }
     };
-  }, [isFocusActive, focusSecondsRemaining, focusTargetMinutes]);
 
-  /** Toggles 30m Focus Timer and 40Hz Gamma soundscape with Screen WakeLock. */
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [focusEndsAt, focusTargetMinutes]);
+
+  // Recompute immediately on resume so the readout is never stale.
+  useEffect(
+    () =>
+      androidSystem.onResume(() => {
+        if (focusEndsAt !== null) {
+          setFocusRemaining(Math.max(0, Math.ceil((focusEndsAt - Date.now()) / 1000)));
+        }
+      }),
+    [focusEndsAt]
+  );
+
+  const isFocusActive = focusEndsAt !== null;
+
   const handleToggleFocus = () => {
-    if (!isFocusActive) {
-      setIsFocusActive(true);
+    if (isFocusActive) {
+      setFocusEndsAt(null);
+      audioEngine.stop();
+      androidSystem.releaseWakeLock();
+      audioEngine.triggerHaptic('light');
+    } else {
+      setFocusEndsAt(Date.now() + focusRemaining * 1000);
       audioEngine.playTrack('track-gamma');
       audioEngine.triggerHaptic('medium');
-      androidSystem.requestWakeLock();
-    } else {
-      setIsFocusActive(false);
-      audioEngine.stop();
-      androidSystem.releaseWakeLock();
+      void androidSystem.requestWakeLock();
     }
   };
 
-  /** Resets focus timer to preset duration. */
-  const handleResetFocusTimer = (minutes: number) => {
-    setIsFocusActive(false);
+  const handleResetFocus = (minutes: number) => {
+    setFocusEndsAt(null);
     audioEngine.stop();
     androidSystem.releaseWakeLock();
     setFocusTargetMinutes(minutes);
-    setFocusSecondsRemaining(minutes * 60);
+    setFocusRemaining(minutes * 60);
     audioEngine.triggerHaptic('light');
   };
 
-  /** Toggles habit completion with sequential discipline verification and micro-chimes. */
   const handleToggleTask = (id: string) => {
-    const { routines: updatedRoutines, sequenceValid } = db.toggleRoutineTask(id);
-    const targetTask = updatedRoutines.find((r) => r.id === id);
-    if (targetTask && targetTask.completed) {
-      audioEngine.playTaskCompleteChime();
-    } else {
-      audioEngine.triggerHaptic('light');
-    }
+    const { routines: updated, sequenceValid } = db.toggleRoutineTask(id);
+    const task = updated.find((r) => r.id === id);
+
+    if (task?.completed) audioEngine.playTaskCompleteChime();
+    else audioEngine.triggerHaptic('light');
 
     if (!sequenceValid) {
-      setOrderWarning('Discipline Notice: Morning sequence completed out of order! (Reduced XP)');
-      setTimeout(() => setOrderWarning(null), 3500);
+      setOrderWarning('Completed out of order — reduced XP for this one.');
+      if (warningTimer.current) clearTimeout(warningTimer.current);
+      warningTimer.current = setTimeout(() => setOrderWarning(null), 3500);
     }
   };
 
-  /** Adds a new custom routine task to local DB. */
   const handleAddHabit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newHabitName.trim()) return;
 
+    const sameCategory = routines.filter((r) => r.category === newHabitCategory);
     db.addRoutineTask({
       name: newHabitName.trim(),
       category: newHabitCategory,
-      orderIndex: routines.length + 1,
+      orderIndex: sameCategory.length + 1,
       durationMinutes: newHabitDuration,
-      timeHint: newHabitTimeHint,
+      timeHint: newHabitTime.trim(),
       iconName: 'Sparkles',
       isMandatory: false
     });
@@ -172,749 +206,474 @@ export const RoutineView: React.FC = () => {
     audioEngine.playTaskCompleteChime();
     audioEngine.triggerHaptic('success');
     setNewHabitName('');
-    setShowAddHabitModal(false);
-  };
-
-  /** Deletes a routine task. */
-  const handleDeleteHabit = (id: string) => {
-    db.deleteRoutineTask(id);
-    audioEngine.triggerHaptic('light');
+    setShowAddHabit(false);
   };
 
   const formatTimer = (seconds: number): string => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${`${m}`.padStart(2, '0')}:${`${s}`.padStart(2, '0')}`;
   };
 
-  const totalFocusSeconds = focusTargetMinutes * 60;
-  const focusProgress = Math.min(100, Math.round(((totalFocusSeconds - focusSecondsRemaining) / totalFocusSeconds) * 100));
+  const morningTasks = routines
+    .filter((r) => r.category === 'MORNING')
+    .sort((a, b) => a.orderIndex - b.orderIndex);
+  const eveningTasks = routines
+    .filter((r) => r.category === 'EVENING')
+    .sort((a, b) => a.orderIndex - b.orderIndex);
+  const customTasks = routines
+    .filter((r) => r.category === 'CUSTOM')
+    .sort((a, b) => a.orderIndex - b.orderIndex);
 
-  const morningTasks = routines.filter((r) => r.category === 'MORNING').sort((a, b) => a.orderIndex - b.orderIndex);
-  const eveningTasks = routines.filter((r) => r.category === 'EVENING').sort((a, b) => a.orderIndex - b.orderIndex);
+  const focusTotal = focusTargetMinutes * 60;
+  const focusProgress =
+    focusTotal === 0 ? 0 : Math.round(((focusTotal - focusRemaining) / focusTotal) * 100);
 
+  /* ── Real month calendar ──────────────────────────────────────────────── */
   const today = new Date();
-  const currentDateFormatted = `${today.getDate().toString().padStart(2, '0')}.${(today.getMonth() + 1).toString().padStart(2, '0')}.${today.getFullYear()}`;
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const leadingBlanks = monthStart.getDay(); // 0 = Sunday, matching WEEKDAY_LABELS
 
-  // Current calendar month days generator (1 to 31)
-  const daysInMonth = new Array(31).fill(null).map((_, i) => i + 1);
-  const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const historyByDate = new Map(history.map((h) => [h.date, h]));
+  const todayKey = toDateKey(today);
+
+  const monthLabel = today.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+  const renderTaskList = (tasks: RoutineTask[]) => (
+    <div className="task-list">
+      {tasks.map((task) => (
+        <div key={task.id} className={`task-row ${task.completed ? 'completed' : ''}`}>
+          <button
+            type="button"
+            className="task-row-main"
+            onClick={() => handleToggleTask(task.id)}
+            aria-pressed={task.completed}
+          >
+            <span className={`task-checkbox ${task.completed ? 'checked' : ''}`} aria-hidden="true">
+              {task.completed && <CheckCircle2 size={16} />}
+            </span>
+            <span className="task-row-text">
+              <span className="task-name">{task.name}</span>
+              <span className="task-meta">
+                {task.timeHint}
+                {task.durationMinutes > 0 ? ` · ${task.durationMinutes}m` : ''}
+                {task.completedAt ? ` · done ${task.completedAt}` : ''}
+              </span>
+            </span>
+          </button>
+
+          {!task.isMandatory && (
+            <button
+              type="button"
+              className="task-delete"
+              onClick={() => {
+                db.deleteRoutineTask(task.id);
+                audioEngine.triggerHaptic('light');
+              }}
+              aria-label={`Delete ${task.name}`}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  const progressBar = (done: number, total: number, doneLabel: string, pendingLabel: string) => (
+    <div className="ref-card-tray">
+      <span className="tray-count">
+        {done} of {total}
+      </span>
+      <div className="ref-progress-striped">
+        <div
+          className="ref-progress-striped-fill"
+          style={{ width: `${total === 0 ? 0 : Math.round((done / total) * 100)}%` }}
+        />
+        <span className="ref-progress-striped-text">
+          {total > 0 && done === total ? doneLabel : pendingLabel}
+        </span>
+      </div>
+    </div>
+  );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
-      
-      {/* ── Reference Top Header Bar ───────────────────────────────── */}
+    <div className="view-stack">
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="ref-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div className="ref-avatar-btn">
-            <span style={{ fontSize: '20px' }}>
-              {profile.selectedArchetype === 'WOLF' ? '🐺' : profile.selectedArchetype === 'TIGER' ? '🐅' : '🦅'}
+        <div className="ref-header-identity">
+          <div className="ref-avatar-btn" aria-hidden="true">
+            <span>
+              {profile.selectedArchetype === 'WOLF'
+                ? '🐺'
+                : profile.selectedArchetype === 'TIGER'
+                  ? '🐅'
+                  : '🦅'}
             </span>
           </div>
           <div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
-              Warrior Disciplines
-            </div>
-            <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
-              {profile.displayName || 'Sovereign Warrior'}
-            </div>
+            <div className="ref-header-eyebrow">Daily disciplines</div>
+            <div className="ref-header-name">{profile.displayName || 'Warrior'}</div>
           </div>
         </div>
 
         <div className="ref-header-actions">
           <button
             className="ref-circle-btn ref-circle-btn-dark"
-            onClick={() => setShowAddHabitModal(true)}
-            title="Add Custom Routine"
-            aria-label="Add custom routine"
+            onClick={() => setShowAddHabit(true)}
+            aria-label="Add a habit"
           >
             <Plus size={18} />
           </button>
-          <div className="ref-circle-btn ref-circle-btn-light" title="Notifications & Streak Status">
+          <button
+            className="ref-circle-btn ref-circle-btn-light"
+            onClick={onOpenNotifications}
+            aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+          >
             <Bell size={18} />
-            {disciplinesStatus.monitoredDoneCount > 0 && <div className="ref-badge-dot" />}
-          </div>
+            {unreadCount > 0 && <span className="ref-badge-dot" />}
+          </button>
         </div>
       </div>
 
-      {/* ── Page Title ─────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <h1 className="ref-page-title" style={{ margin: 0 }}>
-          Task schedule
-        </h1>
-        <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--md-sys-color-primary)', paddingBottom: '4px' }}>
-          {disciplinesStatus.monitoredDoneCount}/4 Verified
-        </div>
+      <div className="view-title-row">
+        <h1 className="ref-page-title">Today</h1>
+        <span className="view-title-meta">{status.monitoredDoneCount}/4 disciplines</span>
       </div>
 
-      {/* ── Schedule Date Dropdown & Edit Action (Screen 2) ─────────── */}
+      {/* ── Month calendar ──────────────────────────────────────────────── */}
       <div className="ref-calendar-container">
         <div className="ref-calendar-header">
-          <button
-            className="ref-date-picker-btn"
-            onClick={() => {
-              setSelectedDay(today.getDate());
-              audioEngine.triggerHaptic('light');
-            }}
-            title="Reset to today"
-            aria-label="Selected date"
-          >
-            <CalendarIcon size={16} color="var(--md-sys-color-primary)" />
-            <span>{currentDateFormatted}</span>
-            <ChevronDown size={14} color="#64748b" />
-          </button>
-
-          <button
-            className="ref-pencil-btn"
-            onClick={() => setShowAddHabitModal(true)}
-            title="Add or Customize Routines"
-            aria-label="Add habit"
-          >
-            <Pencil size={16} />
-          </button>
+          <span className="calendar-month">{monthLabel}</span>
+          <span className="calendar-legend">
+            <span className="calendar-legend-dot complete" aria-hidden="true" /> day secured
+          </span>
         </div>
 
-        {/* ── Weekday Headers + 31 Days Grid ────────────────────────── */}
-        <div className="ref-calendar-grid">
-          {weekdays.map((day, idx) => (
-            <div key={idx} className="ref-weekday-header">
-              {day}
+        <div className="ref-calendar-grid" role="grid" aria-label={`${monthLabel} activity`}>
+          {WEEKDAY_LABELS.map((label, i) => (
+            <div key={`wd-${i}`} className="ref-weekday-header" aria-hidden="true">
+              {label}
             </div>
           ))}
 
-          {daysInMonth.map((day) => {
-            const isSelected = selectedDay === day;
-            const isToday = today.getDate() === day;
-            const isCompleted = day <= today.getDate() && day % 2 === 0;
+          {/* Offset so the 1st lands under its real weekday. */}
+          {Array.from({ length: leadingBlanks }).map((_, i) => (
+            <div key={`blank-${i}`} className="ref-day-cell blank" aria-hidden="true" />
+          ))}
+
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+            const dateKey = toDateKey(new Date(today.getFullYear(), today.getMonth(), day));
+            const entry = historyByDate.get(dateKey);
+            const isToday = dateKey === todayKey;
+            const isFuture = dateKey > todayKey;
+
+            // "Complete" means a real record with at least one discipline.
+            const wasActive = entry
+              ? entry.routinesCompleted > 0 ||
+                entry.walkCompleted ||
+                entry.focusCompleted ||
+                entry.sleepCompleted
+              : isToday && status.monitoredDoneCount > 0;
 
             return (
-              <button
+              <div
                 key={day}
-                type="button"
-                onClick={() => {
-                  setSelectedDay(day);
-                  audioEngine.triggerHaptic('light');
-                }}
-                className={`ref-day-cell ${isSelected ? 'selected' : ''} ${isCompleted && !isSelected ? 'completed' : ''} ${isToday ? 'today' : ''}`}
-                aria-label={`Day ${day}`}
+                role="gridcell"
+                className={[
+                  'ref-day-cell',
+                  isToday ? 'today' : '',
+                  wasActive ? 'completed' : '',
+                  isFuture ? 'future' : ''
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                aria-label={`${dateKey}${wasActive ? ', disciplines logged' : ''}`}
               >
                 {day}
-              </button>
+              </div>
             );
           })}
         </div>
       </div>
 
-      {/* ── Dual-Tone Filter Chips Bar (Screen 1) ────────────────────── */}
-      <div className="ref-filter-bar">
+      {/* ── Filters ─────────────────────────────────────────────────────── */}
+      <div className="ref-filter-bar" role="tablist" aria-label="Routine sections">
         <button
           className="ref-filter-icon-btn"
           onClick={() => setActiveFilter('ALL')}
-          title="Reset filter to all"
-          aria-label="Filter"
+          aria-label="Show everything"
         >
           <SlidersHorizontal size={16} />
         </button>
-
-        <button
-          type="button"
-          className={`ref-filter-pill ${activeFilter === 'ALL' ? 'active' : ''}`}
-          onClick={() => setActiveFilter('ALL')}
-        >
-          <span>All Tasks</span>
-          <span className="ref-filter-count">{routines.length}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`ref-filter-pill ${activeFilter === 'MORNING' ? 'active' : ''}`}
-          onClick={() => setActiveFilter('MORNING')}
-        >
-          <span>Morning</span>
-          <span className="ref-filter-count">{morningTasks.length}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`ref-filter-pill ${activeFilter === 'FOCUS' ? 'active' : ''}`}
-          onClick={() => setActiveFilter('FOCUS')}
-        >
-          <span>Deep Focus</span>
-          <span className="ref-filter-count">{focusCompletedToday ? '✓' : '1'}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`ref-filter-pill ${activeFilter === 'WALK' ? 'active' : ''}`}
-          onClick={() => setActiveFilter('WALK')}
-        >
-          <span>GPS Walk</span>
-          <span className="ref-filter-count">{disciplinesStatus.walkDone ? '✓' : '3k'}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`ref-filter-pill ${activeFilter === 'EVENING' ? 'active' : ''}`}
-          onClick={() => setActiveFilter('EVENING')}
-        >
-          <span>Evening Routine</span>
-          <span className="ref-filter-count">{eveningTasks.length}</span>
-        </button>
+        {([
+          ['ALL', 'All', String(routines.length)],
+          ['FOCUS', 'Focus', status.focusDone ? '✓' : `${focusTargetMinutes}m`],
+          ['WALK', 'Walk', status.walkDone ? '✓' : '3k'],
+          ['MORNING', 'Morning', String(morningTasks.length)],
+          ['EVENING', 'Evening', String(eveningTasks.length)],
+          ['SLEEP', 'Sleep', status.sleepDone ? '✓' : '—']
+        ] as Array<[RoutineFilter, string, string]>).map(([key, label, count]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={activeFilter === key}
+            className={`ref-filter-pill ${activeFilter === key ? 'active' : ''}`}
+            onClick={() => setActiveFilter(key)}
+          >
+            <span>{label}</span>
+            <span className="ref-filter-count">{count}</span>
+          </button>
+        ))}
       </div>
 
-      {/* ── Sequential Order Alert Notice ──────────────────────────── */}
       {orderWarning && (
-        <div style={{
-          background: 'var(--md-sys-color-error-container)',
-          color: 'var(--md-sys-color-on-error-container)',
-          borderRadius: 'var(--md-sys-shape-medium)',
-          padding: '12px 16px',
-          fontSize: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          fontWeight: 700
-        }}>
-          <AlertCircle size={16} />
-          {orderWarning}
+        <div className="notice notice-warning" role="status">
+          <AlertCircle size={16} aria-hidden="true" />
+          <span>{orderWarning}</span>
         </div>
       )}
 
-      {/* ── CARD 1: 30-Minute Monitored Focus Block (Dark Bento Card) ─ */}
+      {/* ── Focus block ─────────────────────────────────────────────────── */}
       {(activeFilter === 'ALL' || activeFilter === 'FOCUS') && (
-        <div className="ref-task-card ref-task-card-dark">
+        <div className="ref-task-card ref-task-card-dark focus-card">
           <div className="ref-task-card-top">
-            <div className="ref-task-card-title">
-              30-Minute Monitored Deep Work Block
-            </div>
-            <div className="ref-task-card-actions">
-              <span className="ref-task-review-badge">
-                {focusCompletedToday ? 'Completed ✓' : `${focusTargetMinutes}m Block`}
-              </span>
-              <button
-                className="ref-arrow-btn"
-                onClick={handleToggleFocus}
-                title={isFocusActive ? 'Pause focus' : 'Ignite focus'}
-                aria-label="Ignite 30m focus session"
-              >
-                <ArrowUpRight size={18} />
-              </button>
-            </div>
+            <div className="ref-task-card-title">Deep work block</div>
+            <span className="ref-task-review-badge">
+              {status.focusDone ? `${status.focusMinutes}m today` : `${focusTargetMinutes}m target`}
+            </span>
           </div>
 
-          <div className="ref-task-card-meta">
-            <div className="ref-time-badge">
-              <Clock size={14} />
-              <span>{isFocusActive ? `${formatTimer(focusSecondsRemaining)} Remaining` : '10.00 AM - 05.30 PM'}</span>
-            </div>
-            <div className="ref-priority-pill">
-              High Priority
-            </div>
-          </div>
-
-          {/* Large Focus Countdown & Controls when active/previewing */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: 'rgba(255, 255, 255, 0.08)',
-            padding: '12px 16px',
-            borderRadius: '20px'
-          }}>
+          <div className="focus-timer-row">
             <div>
-              <div style={{
-                fontSize: '28px',
-                fontFamily: 'var(--md-sys-typescale-display-large-font)',
-                fontWeight: 900,
-                letterSpacing: '-0.5px',
-                lineHeight: 1
-              }}>
-                {formatTimer(focusSecondsRemaining)}
-              </div>
-              <div style={{ fontSize: '10px', opacity: 0.8, marginTop: '4px' }}>
-                {isFocusActive ? '⚡ 40Hz Gamma Audio Active' : 'Target: 30 min uninterrupted focus'}
+              <div className="focus-timer">{formatTimer(focusRemaining)}</div>
+              <div className="focus-timer-sub">
+                {isFocusActive ? '40Hz gamma audio playing' : 'Uninterrupted, phone face down'}
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '6px' }}>
+            <div className="focus-controls">
               <button
                 type="button"
-                className="md3-button-filled md3-button-sm"
+                className={`md3-button-filled md3-button-sm ${isFocusActive ? 'is-running' : ''}`}
                 onClick={handleToggleFocus}
-                style={{
-                  background: isFocusActive ? '#ef4444' : '#ffffff',
-                  color: isFocusActive ? '#ffffff' : '#18181b',
-                  fontWeight: 800,
-                  fontSize: '11px'
-                }}
               >
-                {isFocusActive ? <Pause size={14} /> : <Play size={14} fill="currentColor" />}
-                {isFocusActive ? 'Pause' : 'Ignite'}
+                {isFocusActive ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
+                {isFocusActive ? 'Pause' : 'Start'}
               </button>
-
               <button
                 type="button"
-                onClick={() => handleResetFocusTimer(focusTargetMinutes)}
-                style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  background: 'rgba(255, 255, 255, 0.15)',
-                  color: '#ffffff',
-                  border: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer'
-                }}
-                title="Reset timer"
+                className="icon-button focus-reset"
+                onClick={() => handleResetFocus(focusTargetMinutes)}
+                aria-label="Reset the timer"
               >
-                <RotateCcw size={13} />
+                <RotateCcw size={14} />
               </button>
             </div>
           </div>
 
-          {/* Sub-tray: Avatar Stack & Striped Progress Bar */}
-          <div className="ref-card-tray">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div className="ref-avatar-stack">
-                <div className="ref-avatar-stack-item">🦅</div>
-                <div className="ref-avatar-stack-item">⚡</div>
-                <div className="ref-avatar-stack-item">🔥</div>
-              </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, opacity: 0.9 }}>
-                {focusCompletedToday ? '1 Session Done' : 'Focus Queue'}
-              </span>
-            </div>
-
-            <div className="ref-progress-striped">
-              <div
-                className="ref-progress-striped-fill"
-                style={{ width: `${Math.max(15, focusProgress)}%` }}
-              />
-              <span className="ref-progress-striped-text">
-                {focusCompletedToday ? '100% Completed' : isFocusActive ? `${focusProgress}% In Progress` : 'Ready to Ignite'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── CARD 2: Outdoor GPS Walk & Step Discipline Card ─────────── */}
-      {(activeFilter === 'ALL' || activeFilter === 'WALK') && (
-        <div className="ref-task-card ref-task-card-light">
-          <div className="ref-task-card-top">
-            <div className="ref-task-card-title">
-              GPS Outdoor Walk (3k Steps)
-            </div>
-            <div className="ref-task-card-actions">
-              <span className="ref-task-review-badge">
-                {disciplinesStatus.walkDone ? `${disciplinesStatus.walkSteps} Steps ✓` : '3,000 Step Target'}
-              </span>
+          <div className="focus-presets" role="group" aria-label="Focus duration">
+            {FOCUS_PRESETS.map((m) => (
               <button
-                className="ref-arrow-btn"
-                onClick={() => setActiveFilter(activeFilter === 'WALK' ? 'ALL' : 'WALK')}
-                aria-label="View GPS Walk details"
+                key={m}
+                type="button"
+                className={`preset-chip ${focusTargetMinutes === m ? 'selected' : ''}`}
+                onClick={() => handleResetFocus(m)}
+                disabled={isFocusActive}
               >
-                <ArrowUpRight size={18} />
+                {m}m
               </button>
-            </div>
+            ))}
           </div>
-
-          <div className="ref-task-card-meta">
-            <div className="ref-time-badge">
-              <Clock size={14} />
-              <span>06.30 AM - 07.30 AM</span>
-            </div>
-            <div className="ref-priority-pill" style={{ color: 'var(--md-sys-color-tertiary)', borderColor: 'var(--md-sys-color-tertiary)' }}>
-              Core Discipline
-            </div>
-          </div>
-
-          <GpsWalkTracker />
 
           <div className="ref-card-tray">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Footprints size={18} color="var(--md-sys-color-primary)" />
-              <span style={{ fontSize: '11px', fontWeight: 700 }}>
-                {disciplinesStatus.walkDone ? 'Discipline Secured' : 'GPS Tracking Ready'}
-              </span>
-            </div>
-
+            <span className="tray-count">
+              <Clock size={14} aria-hidden="true" />
+              {status.focusDone ? 'Secured today' : 'Not yet today'}
+            </span>
             <div className="ref-progress-striped">
-              <div
-                className="ref-progress-striped-fill"
-                style={{ width: `${Math.min(100, Math.round((disciplinesStatus.walkSteps / 3000) * 100))}%` }}
-              />
+              <div className="ref-progress-striped-fill" style={{ width: `${focusProgress}%` }} />
               <span className="ref-progress-striped-text">
-                {disciplinesStatus.walkDone ? 'Target Achieved' : 'Tracking Steps'}
+                {isFocusActive ? `${focusProgress}%` : 'Ready'}
               </span>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── CARD 3: Morning Sovereign Sequence List ────────────────── */}
+      {/* ── Walk ────────────────────────────────────────────────────────── */}
+      {(activeFilter === 'ALL' || activeFilter === 'WALK') && <GpsWalkTracker />}
+
+      {/* ── Morning ─────────────────────────────────────────────────────── */}
       {(activeFilter === 'ALL' || activeFilter === 'MORNING') && (
         <div className="ref-task-card ref-task-card-light">
           <div className="ref-task-card-top">
             <div className="ref-task-card-title">
-              Morning Sovereign Sequence
+              <Sun size={16} aria-hidden="true" /> Morning sequence
             </div>
-            <div className="ref-task-card-actions">
-              <span className="ref-task-review-badge">
-                {morningTasks.filter((t) => t.completed).length}/{morningTasks.length} Steps
-              </span>
-              <button
-                className="ref-arrow-btn"
-                onClick={() => setShowAddHabitModal(true)}
-                title="Add custom morning habit"
-                aria-label="Add habit"
-              >
-                <Plus size={18} />
-              </button>
-            </div>
+            <button
+              className="ref-arrow-btn"
+              onClick={() => {
+                setNewHabitCategory('MORNING');
+                setShowAddHabit(true);
+              }}
+              aria-label="Add a morning habit"
+            >
+              <Plus size={18} />
+            </button>
           </div>
 
-          <div className="ref-task-card-meta">
-            <div className="ref-time-badge">
-              <Clock size={14} />
-              <span>06.00 AM - 08.00 AM</span>
-            </div>
-            <div className="ref-priority-pill" style={{ color: 'var(--md-sys-color-primary)', borderColor: 'var(--md-sys-color-primary)' }}>
-              High Priority
-            </div>
-          </div>
-
-          {/* Sequential Checklist Items */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {morningTasks.map((task) => (
-              <div
-                key={task.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '12px 14px',
-                  borderRadius: '16px',
-                  background: task.completed ? 'var(--md-sys-color-tertiary-container)' : '#f8fafc',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <div
-                  onClick={() => handleToggleTask(task.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, cursor: 'pointer' }}
-                >
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '8px',
-                    border: task.completed ? 'none' : '2px solid #cbd5e1',
-                    background: task.completed ? 'var(--md-sys-color-primary)' : 'transparent',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    flexShrink: 0
-                  }}>
-                    {task.completed && <CheckCircle2 size={16} />}
-                  </div>
-                  <div>
-                    <div style={{
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: task.completed ? '#64748b' : '#0f172a',
-                      textDecoration: task.completed ? 'line-through' : 'none'
-                    }}>
-                      {task.name}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>
-                      Target: {task.timeHint} {task.durationMinutes > 0 ? `· ${task.durationMinutes}m` : ''}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span className="md3-chip" style={{ height: '22px', fontSize: '10px', padding: '0 8px' }}>
-                    Step {task.orderIndex}
-                  </span>
-                  {!task.isMandatory && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteHabit(task.id)}
-                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
-                      title="Delete routine"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="ref-card-tray">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Sun size={18} color="#d97706" />
-              <span style={{ fontSize: '11px', fontWeight: 700 }}>
-                {morningTasks.filter((t) => t.completed).length} of {morningTasks.length} Completed
-              </span>
-            </div>
-
-            <div className="ref-progress-striped">
-              <div
-                className="ref-progress-striped-fill"
-                style={{ width: `${Math.round((morningTasks.filter((t) => t.completed).length / Math.max(1, morningTasks.length)) * 100)}%` }}
-              />
-              <span className="ref-progress-striped-text">
-                {morningTasks.filter((t) => t.completed).length === morningTasks.length ? 'Sequence Complete' : 'In Progress'}
-              </span>
-            </div>
-          </div>
+          {morningTasks.length === 0 ? (
+            <p className="empty-hint">No morning habits yet. Add one to get started.</p>
+          ) : (
+            <>
+              {renderTaskList(morningTasks)}
+              {progressBar(
+                morningTasks.filter((t) => t.completed).length,
+                morningTasks.length,
+                'Sequence complete',
+                'In progress'
+              )}
+            </>
+          )}
         </div>
       )}
 
-      {/* ── CARD 4: Circadian Sleep Tracker Card ───────────────────── */}
-      {(activeFilter === 'ALL' || activeFilter === 'SLEEP') && (
+      {/* ── Custom ──────────────────────────────────────────────────────── */}
+      {activeFilter === 'ALL' && customTasks.length > 0 && (
         <div className="ref-task-card ref-task-card-light">
           <div className="ref-task-card-top">
             <div className="ref-task-card-title">
-              Circadian Sleep & Wind-Down
-            </div>
-            <div className="ref-task-card-actions">
-              <span className="ref-task-review-badge">
-                {disciplinesStatus.sleepDone ? 'Logged ✓' : 'Circadian Sync'}
-              </span>
-              <button
-                className="ref-arrow-btn"
-                onClick={() => setActiveFilter(activeFilter === 'SLEEP' ? 'ALL' : 'SLEEP')}
-                aria-label="View sleep tracker"
-              >
-                <ArrowUpRight size={18} />
-              </button>
+              <Sparkles size={16} aria-hidden="true" /> Anytime
             </div>
           </div>
-
-          <div className="ref-task-card-meta">
-            <div className="ref-time-badge">
-              <Clock size={14} />
-              <span>10.00 PM - 06.00 AM</span>
-            </div>
-            <div className="ref-priority-pill" style={{ color: '#4f46e5', borderColor: '#4f46e5' }}>
-              Core Discipline
-            </div>
-          </div>
-
-          <SleepTrackerCard />
+          {renderTaskList(customTasks)}
         </div>
       )}
 
-      {/* ── CARD 5: Evening Wind-Down Checklist ────────────────────── */}
+      {/* ── Sleep ───────────────────────────────────────────────────────── */}
+      {(activeFilter === 'ALL' || activeFilter === 'SLEEP') && <SleepTrackerCard />}
+
+      {/* ── Evening ─────────────────────────────────────────────────────── */}
       {(activeFilter === 'ALL' || activeFilter === 'EVENING') && (
         <div className="ref-task-card ref-task-card-light">
           <div className="ref-task-card-top">
             <div className="ref-task-card-title">
-              Evening Wind-Down Checklist
+              <Moon size={16} aria-hidden="true" /> Evening wind-down
             </div>
-            <div className="ref-task-card-actions">
-              <span className="ref-task-review-badge">
-                {eveningTasks.filter((t) => t.completed).length}/{eveningTasks.length} Steps
-              </span>
-              <button
-                className="ref-arrow-btn"
-                onClick={() => setShowAddHabitModal(true)}
-                title="Add evening habit"
-                aria-label="Add habit"
-              >
-                <Plus size={18} />
-              </button>
-            </div>
+            <button
+              className="ref-arrow-btn"
+              onClick={() => {
+                setNewHabitCategory('EVENING');
+                setShowAddHabit(true);
+              }}
+              aria-label="Add an evening habit"
+            >
+              <Plus size={18} />
+            </button>
           </div>
 
-          <div className="ref-task-card-meta">
-            <div className="ref-time-badge">
-              <Clock size={14} />
-              <span>09.30 PM - 10.30 PM</span>
-            </div>
-            <div className="ref-priority-pill" style={{ color: '#6366f1', borderColor: '#6366f1' }}>
-              Evening Routine
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {eveningTasks.map((task) => (
-              <div
-                key={task.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '12px 14px',
-                  borderRadius: '16px',
-                  background: task.completed ? 'var(--md-sys-color-tertiary-container)' : '#f8fafc',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <div
-                  onClick={() => handleToggleTask(task.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, cursor: 'pointer' }}
-                >
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '8px',
-                    border: task.completed ? 'none' : '2px solid #cbd5e1',
-                    background: task.completed ? 'var(--md-sys-color-primary)' : 'transparent',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    flexShrink: 0
-                  }}>
-                    {task.completed && <CheckCircle2 size={16} />}
-                  </div>
-                  <div>
-                    <div style={{
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: task.completed ? '#64748b' : '#0f172a',
-                      textDecoration: task.completed ? 'line-through' : 'none'
-                    }}>
-                      {task.name}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>
-                      Target: {task.timeHint}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span className="md3-chip" style={{ height: '22px', fontSize: '10px', padding: '0 8px' }}>
-                    Step {task.orderIndex}
-                  </span>
-                  {!task.isMandatory && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteHabit(task.id)}
-                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
-                      title="Delete routine"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="ref-card-tray">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Moon size={18} color="#4f46e5" />
-              <span style={{ fontSize: '11px', fontWeight: 700 }}>
-                {eveningTasks.filter((t) => t.completed).length} of {eveningTasks.length} Done
-              </span>
-            </div>
-
-            <div className="ref-progress-striped">
-              <div
-                className="ref-progress-striped-fill"
-                style={{ width: `${Math.round((eveningTasks.filter((t) => t.completed).length / Math.max(1, eveningTasks.length)) * 100)}%` }}
-              />
-              <span className="ref-progress-striped-text">
-                {eveningTasks.filter((t) => t.completed).length === eveningTasks.length ? 'Ready for Sleep' : 'Wind-Down Active'}
-              </span>
-            </div>
-          </div>
+          {eveningTasks.length === 0 ? (
+            <p className="empty-hint">No evening habits yet.</p>
+          ) : (
+            <>
+              {renderTaskList(eveningTasks)}
+              {progressBar(
+                eveningTasks.filter((t) => t.completed).length,
+                eveningTasks.length,
+                'Ready for sleep',
+                'Winding down'
+              )}
+            </>
+          )}
         </div>
       )}
 
-      {/* ── Add Custom Habit Modal Dialog ──────────────────────────── */}
-      {showAddHabitModal && (
-        <div className="md3-scrim" role="dialog" aria-modal="true">
+      {/* ── Add habit dialog ────────────────────────────────────────────── */}
+      {showAddHabit && (
+        <div className="md3-scrim" role="dialog" aria-modal="true" aria-labelledby="add-habit-title">
           <div className="md3-dialog">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Sparkles size={18} color="var(--md-sys-color-primary)" />
-                <h3 style={{
-                  fontFamily: 'var(--md-sys-typescale-title-large-font)',
-                  fontSize: 'var(--md-sys-typescale-title-large-size)',
-                  fontWeight: 700
-                }}>
-                  Add Custom Discipline
-                </h3>
+            <div className="dialog-header">
+              <div className="dialog-header-title">
+                <Sparkles size={18} aria-hidden="true" />
+                <h3 id="add-habit-title">Add a habit</h3>
               </div>
-              <button 
-                onClick={() => setShowAddHabitModal(false)}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
-                aria-label="Close dialog"
+              <button
+                onClick={() => setShowAddHabit(false)}
+                className="icon-button"
+                aria-label="Close"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleAddHabit} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '6px' }}>
+            <form onSubmit={handleAddHabit} className="dialog-body">
               <div>
-                <label className="md3-field-label">Discipline / Habit Name:</label>
+                <label className="md3-field-label" htmlFor="habit-name">Habit</label>
                 <input
+                  id="habit-name"
                   type="text"
                   required
                   className="md3-field-outlined"
                   value={newHabitName}
                   onChange={(e) => setNewHabitName(e.target.value)}
-                  placeholder="e.g. 100 Pushups & Cold Shower"
+                  placeholder="100 push-ups"
+                  autoFocus
                 />
               </div>
 
               <div>
-                <label className="md3-field-label">Routine Time Slot:</label>
+                <label className="md3-field-label" htmlFor="habit-slot">When</label>
                 <select
+                  id="habit-slot"
                   className="md3-select"
                   value={newHabitCategory}
-                  onChange={(e) => setNewHabitCategory(e.target.value as 'MORNING' | 'EVENING' | 'CUSTOM')}
+                  onChange={(e) => setNewHabitCategory(e.target.value as RoutineTask['category'])}
                 >
-                  <option value="MORNING">Morning Sovereign Sequence</option>
-                  <option value="EVENING">Evening Wind-Down Checklist</option>
-                  <option value="CUSTOM">Custom All-Day Habit</option>
+                  <option value="MORNING">Morning sequence</option>
+                  <option value="EVENING">Evening wind-down</option>
+                  <option value="CUSTOM">Anytime</option>
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div className="field-pair">
                 <div>
-                  <label className="md3-field-label">Target Time:</label>
+                  <label className="md3-field-label" htmlFor="habit-time">Target time</label>
                   <input
+                    id="habit-time"
                     type="text"
                     className="md3-field-outlined"
-                    value={newHabitTimeHint}
-                    onChange={(e) => setNewHabitTimeHint(e.target.value)}
-                    placeholder="e.g. 06:45 AM"
+                    value={newHabitTime}
+                    onChange={(e) => setNewHabitTime(e.target.value)}
+                    placeholder="06:45 AM"
                   />
                 </div>
                 <div>
-                  <label className="md3-field-label">Duration (min):</label>
+                  <label className="md3-field-label" htmlFor="habit-duration">Minutes</label>
                   <input
+                    id="habit-duration"
                     type="number"
-                    min="1"
+                    min={0}
                     className="md3-field-outlined"
                     value={newHabitDuration}
-                    onChange={(e) => setNewHabitDuration(parseInt(e.target.value) || 10)}
+                    onChange={(e) => setNewHabitDuration(Number(e.target.value) || 0)}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '10px' }}>
+              <div className="dialog-actions">
                 <button
                   type="button"
                   className="md3-button-text"
-                  onClick={() => setShowAddHabitModal(false)}
+                  onClick={() => setShowAddHabit(false)}
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="md3-button-filled"
-                >
-                  <Plus size={16} />
-                  Add Discipline
+                <button type="submit" className="md3-button-filled">
+                  <Plus size={16} aria-hidden="true" />
+                  Add
                 </button>
               </div>
             </form>
@@ -922,6 +681,13 @@ export const RoutineView: React.FC = () => {
         </div>
       )}
 
+      {/* Deep link into insights for anyone wanting the fuller picture. */}
+      {activeFilter === 'ALL' && history.length > 0 && (
+        <button type="button" className="md3-button-text card-more" onClick={() => setActiveFilter('ALL')}>
+          {history.length} day{history.length === 1 ? '' : 's'} of history recorded
+          <ArrowUpRight size={14} aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 };

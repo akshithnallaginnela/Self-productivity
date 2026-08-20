@@ -324,7 +324,7 @@ export const WidgetDeck: React.FC<WidgetDeckProps> = ({ onOpenCrisis, onNavigate
             </div>
 
             <div style={{ marginTop: '6px' }}>
-              <div style={{ fontSize: '10px', fontWeight: 600, opacity: 0.85 }}>Aug Realized</div>
+              <div style={{ fontSize: '10px', fontWeight: 600, opacity: 0.85 }}>{new Date().toLocaleString('default', { month: 'short' })} Realized</div>
               <div style={{
                 fontSize: '20px',
                 fontWeight: 800,

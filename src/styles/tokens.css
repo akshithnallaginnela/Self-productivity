@@ -241,3 +241,79 @@
   --md-sys-canvas-gradient-top:             #fff7ed;
   --md-sys-canvas-gradient-bottom:          #f8fafc;
 }
+
+/* ============================================================================
+ * 7. DARK THEME TONAL PALETTES (Deep Obsidian & Luminous Accents)
+ * ========================================================================= */
+
+[data-theme="dark"],
+[data-theme="dark"][data-archetype="EAGLE"] {
+  /* Brand Primary & Secondary Roles */
+  --md-sys-color-primary:                 #f59e0b;
+  --md-sys-color-on-primary:              #18181b;
+  --md-sys-color-primary-container:       #451a03;
+  --md-sys-color-on-primary-container:    #fef3c7;
+  
+  --md-sys-color-secondary:               #a8a29e;
+  --md-sys-color-on-secondary:            #18181b;
+  --md-sys-color-secondary-container:     #292524;
+  --md-sys-color-on-secondary-container:  #f5f5f4;
+
+  --md-sys-color-tertiary:                #22c55e;
+  --md-sys-color-on-tertiary:             #052e16;
+  --md-sys-color-tertiary-container:      #14532d;
+  --md-sys-color-on-tertiary-container:   #dcfce7;
+
+  /* Deep Obsidian Surfaces */
+  --md-sys-color-background:                #09090b;
+  --md-sys-color-surface:                   #09090b;
+  --md-sys-color-surface-dim:               #18181b;
+  --md-sys-color-surface-container-lowest:  #121215;
+  --md-sys-color-surface-container-low:     #18181b;
+  --md-sys-color-surface-container:         #27272a;
+  --md-sys-color-surface-container-high:    #3f3f46;
+  --md-sys-color-surface-container-highest: #52525b;
+
+  --md-sys-color-on-surface:                #f8fafc;
+  --md-sys-color-on-surface-variant:        #94a3b8;
+  --md-sys-color-outline:                   #64748b;
+  --md-sys-color-outline-variant:           #27272a;
+
+  /* Dark Glassmorphism */
+  --md-sys-glass-bg:                        rgba(24, 24, 27, 0.85);
+  --md-sys-glass-border:                    rgba(255, 255, 255, 0.08);
+
+  /* Ambient Canvas Diffusion */
+  --md-sys-canvas-gradient-top:             #1c1917;
+  --md-sys-canvas-gradient-bottom:          #09090b;
+}
+
+[data-theme="dark"][data-archetype="WOLF"] {
+  --md-sys-color-primary:                 #38bdf8;
+  --md-sys-color-on-primary:              #082f49;
+  --md-sys-color-primary-container:       #0c4a6e;
+  --md-sys-color-on-primary-container:    #e0f2fe;
+
+  --md-sys-color-secondary:               #94a3b8;
+  --md-sys-color-on-secondary:            #0f172a;
+  --md-sys-color-secondary-container:     #1e293b;
+  --md-sys-color-on-secondary-container:  #f1f5f9;
+
+  --md-sys-canvas-gradient-top:             #082f49;
+  --md-sys-canvas-gradient-bottom:          #09090b;
+}
+
+[data-theme="dark"][data-archetype="TIGER"] {
+  --md-sys-color-primary:                 #fb923c;
+  --md-sys-color-on-primary:              #431407;
+  --md-sys-color-primary-container:       #7c2d12;
+  --md-sys-color-on-primary-container:    #ffedd5;
+
+  --md-sys-color-secondary:               #a8a29e;
+  --md-sys-color-on-secondary:            #1c1917;
+  --md-sys-color-secondary-container:     #292524;
+  --md-sys-color-on-secondary-container:  #f5f5f4;
+
+  --md-sys-canvas-gradient-top:             #431407;
+  --md-sys-canvas-gradient-bottom:          #09090b;
+}

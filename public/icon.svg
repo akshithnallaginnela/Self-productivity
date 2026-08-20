@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#27272A"/>
+      <stop offset="100%" stop-color="#09090B"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF3C7"/>
+      <stop offset="40%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#B45309"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="50%" stop-color="#D97706"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+
+  <!-- Sovereign Outer Hexagonal Shield Crest -->
+  <path d="M 256 50 L 440 135 L 440 330 L 256 462 L 72 330 L 72 135 Z" fill="none" stroke="url(#shieldGrad)" stroke-width="12" stroke-linejoin="round"/>
+
+  <!-- Left Sovereign Wing -->
+  <path d="M 256 180 L 120 120 L 70 200 L 160 240 L 90 290 L 175 320 L 125 380 L 256 420 Z" fill="url(#goldGrad)"/>
+
+  <!-- Right Sovereign Wing -->
+  <path d="M 256 180 L 392 120 L 442 200 L 352 240 L 422 290 L 337 320 L 387 380 L 256 420 Z" fill="url(#shieldGrad)"/>
+
+  <!-- Sovereign Apex Eagle Head -->
+  <polygon points="256,90 295,155 256,200 217,155" fill="#FFFFFF"/>
+  <polygon points="256,200 282,240 256,260 230,240" fill="#F59E0B"/>
+
+  <!-- Core Flame Crystal -->
+  <polygon points="256,265 305,325 256,400 207,325" fill="#18181B" stroke="#FEF3C7" stroke-width="6"/>
+  <circle cx="256" cy="335" r="16" fill="#F59E0B"/>
+</svg>

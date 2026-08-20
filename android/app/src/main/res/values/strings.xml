@@ -1,7 +1,39 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Recovery Warrior</string>
-    <string name="title_activity_main">Recovery Warrior</string>
+    <string name="app_name">Sovereign Eagle</string>
+    <string name="title_activity_main">Sovereign Eagle</string>
     <string name="package_name">com.recoverywarrior.app</string>
     <string name="custom_url_scheme">com.recoverywarrior.app</string>
+
+    <!-- Widget picker descriptions -->
+    <string name="widget_streak_description">Sobriety streak, rank and a one-tap SOS shield.</string>
+    <string name="widget_habits_description">Today\'s habit progress and your next habit.</string>
+    <string name="widget_forge_description">This month\'s freelance income against your target.</string>
+
+    <!--
+        App widget placeholder strings.
+        These render only in the gap before a widget's first onUpdate, so every
+        value is an empty/zero state. Never put sample data here.
+    -->
+    <string name="widget_emoji_eagle">🦅</string>
+    <string name="widget_emoji_flame">🔥</string>
+    <string name="widget_zero">0</string>
+
+    <string name="widget_streak_label">SOBRIETY SHIELD</string>
+    <string name="widget_days_sober">DAYS SOBER</string>
+    <string name="widget_rank_empty">Not started</string>
+    <string name="widget_streak_empty">No streak yet</string>
+    <string name="widget_sos">🚨 SOS</string>
+    <string name="widget_sos_description">Open the crisis shield</string>
+
+    <string name="widget_habits_label">HABITS</string>
+    <string name="widget_ratio_empty">0/0</string>
+    <string name="widget_percent_empty">0%</string>
+    <string name="widget_habits_empty">Open to set up your routine</string>
+
+    <string name="widget_forge_label">FORGE ₹</string>
+    <string name="widget_forge_month">This month</string>
+    <string name="widget_pace_empty">0% pace</string>
+    <string name="widget_amount_empty">₹0</string>
+    <string name="widget_goal_empty">No target set</string>
 </resources>

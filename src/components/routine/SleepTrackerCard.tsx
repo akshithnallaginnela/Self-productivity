@@ -14,10 +14,7 @@ import {
   Play,
   Square,
   CheckCircle2,
-  Clock,
-  Sparkles,
-  Volume2,
-  BedDouble
+  Volume2
 } from 'lucide-react';
 import { db } from '../../services/db';
 import { audioEngine } from '../../services/audioEngine';
@@ -33,7 +30,6 @@ export const SleepTrackerCard: React.FC = () => {
   /* ── Wind-down sleep timer state ─────────────────────────────────── */
   const [isSleepTimerActive, setIsSleepTimerActive] = useState<boolean>(false);
   const [sleepTimerSeconds, setSleepTimerSeconds] = useState<number>(20 * 60); // 20 min wind-down
-  const [isPlayingDelta, setIsPlayingDelta] = useState<boolean>(false);
 
   useEffect(() => {
     const unsub = db.subscribe(() => {
@@ -48,7 +44,6 @@ export const SleepTrackerCard: React.FC = () => {
       timer = setInterval(() => setSleepTimerSeconds((prev) => prev - 1), 1000);
     } else if (sleepTimerSeconds === 0 && isSleepTimerActive) {
       setIsSleepTimerActive(false);
-      setIsPlayingDelta(false);
       audioEngine.stop();
     }
     return () => clearInterval(timer);
@@ -98,11 +93,9 @@ export const SleepTrackerCard: React.FC = () => {
   const handleToggleSleepTimer = () => {
     if (!isSleepTimerActive) {
       setIsSleepTimerActive(true);
-      setIsPlayingDelta(true);
       audioEngine.playTrack('track-rain');
     } else {
       setIsSleepTimerActive(false);
-      setIsPlayingDelta(false);
       audioEngine.stop();
     }
   };

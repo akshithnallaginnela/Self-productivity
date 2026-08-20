@@ -8,10 +8,41 @@
  *   3. Archetype persona resonance (Eagle Vision / Wolf Pack Discipline / Tiger Silent Strike)
  */
 
-import { Archetype, GeminiCoachInsight, GeminiMessage } from '../types';
-import { db } from './db';
+import { Archetype, GeminiCoachInsight } from '../types';
+import { db, toDateKey } from './db';
 
 const GEMINI_API_KEY_STORAGE = 'rw_gemini_api_key';
+
+/**
+ * Model id, kept in one place so it can be rolled forward without hunting
+ * through request builders. Flash is the right tier here: short, cheap,
+ * latency-sensitive coaching turns.
+ */
+const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_ENDPOINT = (model: string, key: string): string =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+
+/** Give up on a coaching call rather than leaving the UI spinning. */
+const REQUEST_TIMEOUT_MS = 12_000;
+
+/** fetch with an abort-based timeout. */
+const fetchWithTimeout = async (url: string, init: RequestInit): Promise<Response> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+/** Safely pulls the first text part out of a Gemini response. */
+const extractText = (data: unknown): string | null => {
+  const candidates = (data as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })
+    ?.candidates;
+  const text = candidates?.[0]?.content?.parts?.[0]?.text;
+  return typeof text === 'string' && text.trim() ? text : null;
+};
 
 /** Offline contextual warrior intelligence knowledge base */
 const ARCHETYPE_AI_KNOWLEDGE: Record<Archetype, {
@@ -116,7 +147,8 @@ class GeminiService {
   public async generateDailyInsight(): Promise<GeminiCoachInsight> {
     const profile = db.getProfile();
     const archetype = profile.selectedArchetype || 'EAGLE';
-    const today = new Date().toISOString().split('T')[0];
+    const today = toDateKey();
+    const daysSober = db.getDaysSober();
     const apiKey = this.getApiKey();
 
     const fallbackKnowledge = ARCHETYPE_AI_KNOWLEDGE[archetype];
@@ -126,7 +158,7 @@ class GeminiService {
 
     if (apiKey) {
       try {
-        const prompt = `You are the ultimate elite warrior coach embodying the ${archetype} archetype for a user on Day ${profile.currentStreak} of sobriety and discipline.
+        const prompt = `You are the ultimate elite warrior coach embodying the ${archetype} archetype for a user on day ${daysSober} of their current clean period (engagement streak: ${profile.currentStreak} days).
 Generate a concise, powerful daily coaching directive:
 Format as JSON with keys:
 - title (short title)
@@ -136,21 +168,20 @@ Format as JSON with keys:
 - aiAdvice (1 paragraph of personalized psychological motivation)
 Keep tone: Spartan, highly motivating, stoic, sovereign, and practical.`;
 
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: 'application/json' }
-            })
-          }
-        );
+        const res = await fetchWithTimeout(GEMINI_ENDPOINT(GEMINI_MODEL, apiKey), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json' }
+          })
+        });
 
-        if (res.ok) {
-          const data = await res.json();
-          const parsed = JSON.parse(data.candidates[0].content.parts[0].text);
+        // Every access below is defensive: a truncated or safety-filtered
+        // response has no parts array, and blindly indexing it used to throw.
+        const text = res.ok ? extractText(await res.json()) : null;
+        if (text) {
+          const parsed = JSON.parse(text) as Record<string, string>;
           const insight: GeminiCoachInsight = {
             id: `ai-${Date.now()}`,
             date: today,
@@ -175,11 +206,11 @@ Keep tone: Spartan, highly motivating, stoic, sovereign, and practical.`;
       id: `ai-${Date.now()}`,
       date: today,
       archetype,
-      title: `${archetype} Sovereign Directive — Day ${profile.currentStreak}`,
+      title: `${archetype} directive — day ${daysSober}`,
       quote,
       dailyDirective: directive,
       urgeStrategy,
-      aiAdvice: `As an ${archetype} Warrior on Day ${profile.currentStreak}, your neural clarity is reaching a heightened state. Stay vigilant against subtle micro-rationalizations. Lock in your 30m focus and GPS walk early.`,
+      aiAdvice: `As an ${archetype} on day ${daysSober}, your neural clarity is reaching a heightened state. Stay vigilant against subtle micro-rationalizations. Lock in your 30m focus and GPS walk early.`,
       generatedAt: new Date().toISOString()
     };
 
@@ -193,32 +224,26 @@ Keep tone: Spartan, highly motivating, stoic, sovereign, and practical.`;
   public async askWarriorCoach(query: string): Promise<string> {
     const profile = db.getProfile();
     const archetype = profile.selectedArchetype || 'EAGLE';
+    const daysSober = db.getDaysSober();
     const apiKey = this.getApiKey();
     const cleanQuery = query.trim().toLowerCase();
 
     if (apiKey) {
       try {
-        const prompt = `You are the ${archetype} Warrior AI Coach in the Recovery Warrior app.
-The user is on Day ${profile.currentStreak} of sobriety and self-discipline.
+        const prompt = `You are the ${archetype} Warrior AI Coach in the Sovereign Eagle app.
+The user is on day ${daysSober} of their current clean period.
 User query: "${query}"
 Respond with maximum impact in 2-3 concise paragraphs.
 Tone: Stoic, deeply compassionate yet uncompromisingly disciplined, empowering, and focused on physical and mental sovereignty.`;
 
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }]
-            })
-          }
-        );
+        const res = await fetchWithTimeout(GEMINI_ENDPOINT(GEMINI_MODEL, apiKey), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
 
-        if (res.ok) {
-          const data = await res.json();
-          return data.candidates[0].content.parts[0].text;
-        }
+        const text = res.ok ? extractText(await res.json()) : null;
+        if (text) return text;
       } catch (err) {
         console.warn('Gemini API query error, falling back to local coach:', err);
       }
@@ -236,7 +261,7 @@ Tone: Stoic, deeply compassionate yet uncompromisingly disciplined, empowering, 
       return `🌙 ${knowledge.adviceCatalog.fatigue}\n\nRecharge your circadian rhythm with tonight's sleep timer.`;
     }
 
-    return `🦅 [${archetype} Coach]: Day ${profile.currentStreak} is a test of consistency. ${knowledge.adviceCatalog.motivation}\n\nDaily Focus: ${knowledge.directives[0]}`;
+    return `🦅 [${archetype} Coach]: Day ${daysSober} is a test of consistency. ${knowledge.adviceCatalog.motivation}\n\nDaily Focus: ${knowledge.directives[0]}`;
   }
 }
 
