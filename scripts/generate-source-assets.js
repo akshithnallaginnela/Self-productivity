@@ -171,7 +171,19 @@ async function generate() {
       .toFile(path.join(targetDir, 'splash.png'));
   }
 
-  console.log('\n🎉 ALL assets (including splash-dark and dark/night drawables) updated with the new Sovereign Eagle logo!');
+  // Android 12+ Splash Icon (Square 512x512 1:1 ratio, centered)
+  const drawableDir = path.join(androidResDir, 'drawable');
+  if (!fs.existsSync(drawableDir)) fs.mkdirSync(drawableDir, { recursive: true });
+
+  const splashIconBuffer = await sharp(masterBuffer)
+    .resize(512, 512)
+    .png()
+    .toBuffer();
+
+  await fs.promises.writeFile(path.join(drawableDir, 'splash_icon.png'), splashIconBuffer);
+  await fs.promises.writeFile(path.join(drawableDir, 'splash.png'), splashIconBuffer);
+
+  console.log('\n🎉 ALL assets (including splash_icon and dark/night drawables) updated with the new Sovereign Eagle logo!');
 }
 
 generate().catch(console.error);
