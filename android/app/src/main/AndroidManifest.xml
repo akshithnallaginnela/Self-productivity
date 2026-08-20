@@ -1,6 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
     <!--
         Permissions are deliberately minimal. Every entry below is actually
         exercised by shipping code; anything the app does not use is removed so
@@ -36,7 +35,6 @@
         android:hardwareAccelerated="true"
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/AppTheme.NoActionBar">
-
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
@@ -45,12 +43,10 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
         </activity>
 
         <provider
@@ -58,9 +54,7 @@
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
 
         <!--
@@ -70,41 +64,27 @@
         -->
 
         <!-- 1. Sobriety Shield (4x2) — streak, rank, one-tap SOS -->
-        <receiver
-            android:name=".widgets.StreakWidgetProvider"
-            android:exported="false">
+        <receiver android:name=".widgets.StreakWidgetProvider" android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/streak_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/streak_widget_info" />
         </receiver>
 
         <!-- 2. Habits (2x2) — today's progress, one-tap check-off -->
-        <receiver
-            android:name=".widgets.HabitsWidgetProvider"
-            android:exported="false">
+        <receiver android:name=".widgets.HabitsWidgetProvider" android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/habits_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/habits_widget_info" />
         </receiver>
 
         <!-- 3. Freelance Forge (2x2) — month-to-date income vs target -->
-        <receiver
-            android:name=".widgets.ForgeWidgetProvider"
-            android:exported="false">
+        <receiver android:name=".widgets.ForgeWidgetProvider" android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/forge_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/forge_widget_info" />
         </receiver>
-
     </application>
-
 </manifest>
