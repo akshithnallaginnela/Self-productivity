@@ -252,6 +252,65 @@ class WebAudioEngine {
   }
 
   /**
+   * Synthesizes a crisp, subtle 2-tone chime on task or habit completion.
+   */
+  public playTaskCompleteChime(): void {
+    try {
+      const ctx = this.initContext();
+      const now = ctx.currentTime;
+
+      const notes = [784, 1046]; // G5 -> C6 high resolution harmonic
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+
+        gain.gain.setValueAtTime(0.001, now + idx * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.18, now + idx * 0.08 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.08 + 0.4);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now + idx * 0.08);
+        osc.stop(now + idx * 0.08 + 0.45);
+      });
+
+      this.triggerHaptic('light');
+    } catch {
+      // Ignore audio error
+    }
+  }
+
+  /**
+   * Triggers native device haptic vibration feedback when available.
+   */
+  public triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'success' = 'light'): void {
+    try {
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        switch (type) {
+          case 'light':
+            navigator.vibrate(15);
+            break;
+          case 'medium':
+            navigator.vibrate([20, 30, 20]);
+            break;
+          case 'heavy':
+            navigator.vibrate([35, 40, 35]);
+            break;
+          case 'success':
+            navigator.vibrate([15, 30, 45, 30, 60]);
+            break;
+        }
+      }
+    } catch {
+      // Haptics unavailable on desktop
+    }
+  }
+
+  /**
    * Retrieves real-time FFT frequency data for visualizer bars.
    * @returns {Uint8Array} Byte frequency array
    */

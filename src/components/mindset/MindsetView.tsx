@@ -119,15 +119,48 @@ export const MindsetView: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* ── Top Header Bar ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span className="md3-section-title">Mindset Sanctuary</span>
-          <h1 className="md3-headline">Archetype Resonance</h1>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
+      {/* ── Reference Top Header Bar ───────────────────────────────── */}
+      <div className="ref-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="ref-avatar-btn">
+            <span style={{ fontSize: '20px' }}>
+              {profile.selectedArchetype === 'WOLF' ? '🐺' : profile.selectedArchetype === 'TIGER' ? '🐅' : '🦅'}
+            </span>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
+              Mindset Sanctuary
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
+              {profile.displayName || 'Sovereign Warrior'}
+            </div>
+          </div>
         </div>
+
+        <div className="ref-header-actions">
+          <button
+            className="ref-circle-btn ref-circle-btn-dark"
+            onClick={handleNewPrompt}
+            title="Generate New Prompt"
+            aria-label="New prompt"
+          >
+            <Sparkles size={18} />
+          </button>
+          <div className="ref-circle-btn ref-circle-btn-light" title="Notifications">
+            <span style={{ fontSize: '12px', fontWeight: 800 }}>AI</span>
+            <div className="ref-badge-dot" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Page Title ─────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <h1 className="ref-page-title" style={{ margin: 0 }}>
+          Archetype Resonance
+        </h1>
         <div className="md3-chip md3-chip-filled" style={{ fontWeight: 800 }}>
-          {profile.selectedArchetype} Archetype
+          {profile.selectedArchetype} Spirit
         </div>
       </div>
 

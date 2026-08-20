@@ -111,7 +111,7 @@ html, body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 56px 16px 108px 16px;
+  padding: 54px 16px 96px 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -126,10 +126,10 @@ html, body {
 }
 
 
-/* ── Floating Crisis FAB (Positioned above M3 nav bar) ────────────────────── */
+/* ── Floating Crisis FAB (Positioned above floating dock) ─────────────────── */
 .crisis-fab {
   position: absolute;
-  bottom: 106px;
+  bottom: 86px;
   right: 16px;
   z-index: 42;
 }

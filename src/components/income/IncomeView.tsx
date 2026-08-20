@@ -80,24 +80,53 @@ export const IncomeView: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      {/* ── Top Header Bar ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span className="md3-section-title">Freelance Forge</span>
-          <h1 className="md3-headline">Monetary Velocity (₹)</h1>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
+      {/* ── Reference Top Header Bar ───────────────────────────────── */}
+      <div className="ref-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="ref-avatar-btn">
+            <span style={{ fontSize: '20px' }}>
+              {profile.selectedArchetype === 'WOLF' ? '🐺' : profile.selectedArchetype === 'TIGER' ? '🐅' : '🦅'}
+            </span>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
+              Freelance Forge
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
+              {profile.displayName || 'Sovereign Warrior'}
+            </div>
+          </div>
         </div>
-        <button 
-          className="md3-button-filled md3-button-sm"
-          onClick={() => setIsAddModalOpen(true)}
-        >
-          <Plus size={15} />
-          Log Income
-        </button>
+
+        <div className="ref-header-actions">
+          <button
+            className="ref-circle-btn ref-circle-btn-dark"
+            onClick={() => setIsAddModalOpen(true)}
+            title="Log Freelance Income"
+            aria-label="Log income"
+          >
+            <Plus size={18} />
+          </button>
+          <div className="ref-circle-btn ref-circle-btn-light" title="Notifications">
+            <span style={{ fontSize: '14px' }}>₹</span>
+            <div className="ref-badge-dot" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Page Title ─────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <h1 className="ref-page-title" style={{ margin: 0 }}>
+          Monetary Velocity
+        </h1>
+        <div className="md3-chip md3-chip-filled" style={{ fontSize: '11px', fontWeight: 800 }}>
+          Goal: {formatINR(profile.targetMonthlyIncome)}
+        </div>
       </div>
 
       {/* ── Hero Income Card (M3 Tinted Container) ─────────────────── */}
-      <div className="md3-card-tinted" style={{ padding: '20px' }}>
+      <div className="ref-task-card ref-task-card-tinted" style={{ padding: '22px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
