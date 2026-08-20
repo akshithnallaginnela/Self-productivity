@@ -1,13 +1,13 @@
 /**
- * RoutineView.tsx — Daily Habit Engine & Sovereign Rituals
+ * RoutineView.tsx — Monitored Disciplines & Daily Habit Engine
  *
- * Implements pure Material Design 3 (material.io) layout paradigms:
- *   1. Pomodoro Focus Timer with M3 Segmented Button intervals (25m / 50m) and Gamma wave audio
- *   2. Morning Sovereign Sequence in a clean M3 Grouped List Container with tactile checkboxes
- *   3. Evening Wind-Down Sequence with sequential progress tracking
- *   4. Circadian Sleep Quality Logger
+ * Implements:
+ *   1. Monitored GPS Walk & Real-time Step Counter (GpsWalkTracker)
+ *   2. Monitored 30-Minute Deep Focus Engine with 40Hz Gamma soundscape & completion verification
+ *   3. Circadian Sleep & Wind-Down Tracker (SleepTrackerCard)
+ *   4. Morning Sovereign Rituals & Evening Wind-Down Checklist
  *
- * Enforces strict sequential order checking for morning rituals and awards discipline XP.
+ * Disciplines are strictly monitored and extend the Duolingo daily streak upon genuine completion!
  */
 
 import React, { useState, useEffect } from 'react';
@@ -16,106 +16,122 @@ import {
   Moon,
   Flame,
   Play,
-  Square,
+  Pause,
   RotateCcw,
-  Star,
-  Clock,
-  AlertCircle,
   CheckCircle2,
-  ListTodo
+  AlertCircle,
+  Footprints,
+  Sparkles,
+  Zap,
+  Target,
+  ShieldCheck
 } from 'lucide-react';
-import { RoutineTask } from '../../types';
+import { RoutineTask, FocusSession } from '../../types';
 import { db } from '../../services/db';
 import { audioEngine } from '../../services/audioEngine';
+import { GpsWalkTracker } from './GpsWalkTracker';
+import { SleepTrackerCard } from './SleepTrackerCard';
 
-/**
- * Renders the Material Design 3 Daily Habit Engine.
- */
 export const RoutineView: React.FC = () => {
   const [routines, setRoutines] = useState<RoutineTask[]>(db.getRoutines());
   const [orderWarning, setOrderWarning] = useState<string | null>(null);
+  const [disciplinesStatus, setDisciplinesStatus] = useState(db.getTodayDisciplinesStatus());
 
-  /* ── Sleep logger state ──────────────────────────────────────────── */
-  const [sleepRating, setSleepRating] = useState<number>(4);
-  const [wakeTime, setWakeTime] = useState<string>('05:30');
-  const [bedTime, setBedTime] = useState<string>('22:00');
-  const [sleepSaved, setSleepSaved] = useState<boolean>(false);
-
-  /* ── Pomodoro timer state ────────────────────────────────────────── */
-  const [deepWorkSeconds, setDeepWorkSeconds] = useState<number>(25 * 60);
-  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+  /* ── 30-min Monitored Focus Engine state ─────────────────────────── */
+  const [focusTargetMinutes, setFocusTargetMinutes] = useState<number>(30);
+  const [focusSecondsRemaining, setFocusSecondsRemaining] = useState<number>(30 * 60);
+  const [isFocusActive, setIsFocusActive] = useState<boolean>(false);
+  const [focusCompletedToday, setFocusCompletedToday] = useState<boolean>(false);
 
   /** Subscribes to reactive database updates. */
   useEffect(() => {
-    const unsub = db.subscribe(() => setRoutines(db.getRoutines()));
+    const unsub = db.subscribe(() => {
+      setRoutines(db.getRoutines());
+      const status = db.getTodayDisciplinesStatus();
+      setDisciplinesStatus(status);
+      setFocusCompletedToday(status.focusDone);
+    });
     return () => unsub();
   }, []);
 
   /**
-   * Pomodoro countdown timer loop with victory triumph synthesizer.
+   * Monitored Focus timer countdown loop.
    */
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;
-    if (isTimerRunning && deepWorkSeconds > 0) {
-      timer = setInterval(() => setDeepWorkSeconds((prev) => prev - 1), 1000);
-    } else if (deepWorkSeconds === 0 && isTimerRunning) {
-      setIsTimerRunning(false);
+    if (isFocusActive && focusSecondsRemaining > 0) {
+      timer = setInterval(() => setFocusSecondsRemaining((prev) => prev - 1), 1000);
+    } else if (focusSecondsRemaining === 0 && isFocusActive) {
+      setIsFocusActive(false);
+      audioEngine.stop();
       audioEngine.playMilestoneTriumph();
+
+      // Log completed session to DB and trigger streak extension!
+      const session: FocusSession = {
+        id: `focus-${Date.now()}`,
+        date: new Date().toISOString().split('T')[0],
+        targetMinutes: focusTargetMinutes,
+        completedMinutes: focusTargetMinutes,
+        completed: true,
+        timestamp: new Date().toISOString(),
+        soundTrack: 'track-gamma'
+      };
+      db.saveFocusSession(session);
     }
     return () => clearInterval(timer);
-  }, [isTimerRunning, deepWorkSeconds]);
+  }, [isFocusActive, focusSecondsRemaining, focusTargetMinutes]);
 
-  /**
-   * Toggles habit completion with sequential discipline verification.
-   */
-  const handleToggleTask = (id: string) => {
-    const { sequenceValid } = db.toggleRoutineTask(id);
-    if (!sequenceValid) {
-      setOrderWarning('Discipline Alert: Completed out of sequential order! (Reduced XP awarded)');
-      setTimeout(() => setOrderWarning(null), 3500);
-    }
-  };
-
-  /** Toggles Pomodoro focus timer and 40Hz Gamma soundscape audio. */
-  const handleToggleTimer = () => {
-    if (!isTimerRunning) {
-      setIsTimerRunning(true);
+  /** Toggles 30m Focus Timer and 40Hz Gamma soundscape. */
+  const handleToggleFocus = () => {
+    if (!isFocusActive) {
+      setIsFocusActive(true);
       audioEngine.playTrack('track-gamma');
     } else {
-      setIsTimerRunning(false);
+      setIsFocusActive(false);
       audioEngine.stop();
     }
   };
 
-  /** Resets timer to specified duration in minutes. */
-  const handleResetTimer = (minutes: number) => {
-    setIsTimerRunning(false);
+  /** Resets focus timer to preset duration. */
+  const handleResetFocusTimer = (minutes: number) => {
+    setIsFocusActive(false);
     audioEngine.stop();
-    setDeepWorkSeconds(minutes * 60);
+    setFocusTargetMinutes(minutes);
+    setFocusSecondsRemaining(minutes * 60);
   };
 
-  /** Formats seconds into MM:SS display notation. */
+  /** Toggles habit completion with sequential discipline verification. */
+  const handleToggleTask = (id: string) => {
+    const { sequenceValid } = db.toggleRoutineTask(id);
+    if (!sequenceValid) {
+      setOrderWarning('Discipline Notice: Morning sequence completed out of order! (Reduced XP)');
+      setTimeout(() => setOrderWarning(null), 3500);
+    }
+  };
+
   const formatTimer = (seconds: number): string => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const totalFocusSeconds = focusTargetMinutes * 60;
+  const focusProgress = Math.min(100, Math.round(((totalFocusSeconds - focusSecondsRemaining) / totalFocusSeconds) * 100));
+
   const morningTasks = routines.filter((r) => r.category === 'MORNING').sort((a, b) => a.orderIndex - b.orderIndex);
   const eveningTasks = routines.filter((r) => r.category === 'EVENING').sort((a, b) => a.orderIndex - b.orderIndex);
-  const completedCount = routines.filter((r) => r.completed).length;
-  const adherenceRate = Math.round((completedCount / Math.max(1, routines.length)) * 100);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* ── Top Header Bar ─────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <span className="md3-section-title">Habit Engine</span>
-          <h1 className="md3-headline">Daily Disciplines</h1>
+          <span className="md3-section-title">Verified Disciplines</span>
+          <h1 className="md3-headline">Monitored Matrix</h1>
         </div>
-        <div className="md3-chip md3-chip-filled">
-          {adherenceRate}% Adherence
+        <div className="md3-chip md3-chip-filled" style={{ gap: '6px' }}>
+          <Zap size={14} color="var(--md-sys-color-primary)" />
+          <span>{disciplinesStatus.monitoredDoneCount}/4 Disciplines Done</span>
         </div>
       </div>
 
@@ -125,104 +141,131 @@ export const RoutineView: React.FC = () => {
           background: 'var(--md-sys-color-error-container)',
           color: 'var(--md-sys-color-on-error-container)',
           borderRadius: 'var(--md-sys-shape-medium)',
-          padding: '10px 14px',
+          padding: '12px 16px',
           fontSize: '12px',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          fontWeight: 600,
-          animation: 'fadeIn 0.2s ease'
+          fontWeight: 700
         }}>
           <AlertCircle size={16} />
           {orderWarning}
         </div>
       )}
 
-      {/* ── Deep Work Pomodoro Card (M3 Tinted Container) ──────────── */}
-      <div className="md3-card-secondary-tinted" style={{ textAlign: 'center', padding: '20px' }}>
+      {/* ── Monitored Discipline 1: GPS Walk Tracker ───────────────── */}
+      <GpsWalkTracker />
+
+      {/* ── Monitored Discipline 2: 30-Min Deep Focus Engine ────────── */}
+      <div className="md3-card-secondary-tinted" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Flame size={16} />
-            <span style={{
-              fontFamily: 'var(--md-sys-typescale-label-large-font)',
-              fontSize: '12px',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: 'var(--md-sys-shape-full)',
+              background: focusCompletedToday ? 'var(--md-sys-color-tertiary-container)' : 'var(--md-sys-color-surface-container-lowest)',
+              color: focusCompletedToday ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-on-secondary-container)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}>
-              40Hz Gamma Deep Work
-            </span>
+              <Flame size={20} />
+            </div>
+            <div>
+              <span className="md3-section-title" style={{ fontSize: '10px' }}>MONITORED FOCUS</span>
+              <h2 style={{ fontSize: '16px', fontWeight: 800 }}>
+                30m Deep Work Block
+              </h2>
+            </div>
           </div>
 
-          {/* M3 Segmented Button Pair for Pomodoro presets */}
+          {/* Duration Presets */}
           <div style={{ width: '130px' }}>
             <div className="md3-segmented-group">
-              <button
-                type="button"
-                className={`md3-segmented-item ${deepWorkSeconds === 25 * 60 ? 'active' : ''}`}
-                onClick={() => handleResetTimer(25)}
-                style={{ height: '28px', fontSize: '11px' }}
-              >
-                25m
-              </button>
-              <button
-                type="button"
-                className={`md3-segmented-item ${deepWorkSeconds === 50 * 60 ? 'active' : ''}`}
-                onClick={() => handleResetTimer(50)}
-                style={{ height: '28px', fontSize: '11px' }}
-              >
-                50m
-              </button>
+              {[30, 45, 60].map((mins) => (
+                <button
+                  key={mins}
+                  type="button"
+                  onClick={() => handleResetFocusTimer(mins)}
+                  className={`md3-segmented-item ${focusTargetMinutes === mins ? 'active' : ''}`}
+                  style={{ height: '28px', fontSize: '11px', padding: '0 6px' }}
+                >
+                  {mins}m
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Large Timer Display */}
-        <div style={{
-          fontSize: '54px',
-          fontFamily: 'var(--md-sys-typescale-display-large-font)',
-          fontWeight: 800,
-          margin: '10px 0',
-          letterSpacing: '-1px',
-          fontVariantNumeric: 'tabular-nums'
-        }}>
-          {formatTimer(deepWorkSeconds)}
+        {/* Large Timer & Waveform */}
+        <div style={{ textAlign: 'center', margin: '14px 0' }}>
+          <div style={{
+            fontSize: '52px',
+            fontFamily: 'var(--md-sys-typescale-display-large-font)',
+            fontWeight: 900,
+            letterSpacing: '-1px',
+            lineHeight: 1,
+            fontVariantNumeric: 'tabular-nums'
+          }}>
+            {formatTimer(focusSecondsRemaining)}
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--md-sys-color-on-secondary-container)', opacity: 0.85, marginTop: '4px' }}>
+            {isFocusActive ? '⚡ 40Hz Gamma Wave Focus Audio Active' : 'Target: 30 minutes uninterrupted deep work'}
+          </div>
         </div>
 
-        {/* M3 Stadium Button Action Row */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
-          <button className="md3-button-filled" onClick={handleToggleTimer}>
-            {isTimerRunning ? <Square size={14} /> : <Play size={14} fill="currentColor" />}
-            {isTimerRunning ? 'Pause Session' : 'Ignite Focus'}
-          </button>
-          
-          <button 
-            className="md3-button-outlined" 
-            onClick={() => handleResetTimer(25)}
-            style={{ borderColor: 'currentColor', color: 'inherit' }}
-            title="Reset timer"
+        {/* Progress Bar */}
+        <div className="md3-progress-track" style={{ height: '6px', background: 'rgba(0,0,0,0.08)' }}>
+          <div
+            className="md3-progress-indicator"
+            style={{ width: `${focusProgress}%`, background: 'var(--md-sys-color-on-secondary-container)' }}
+          />
+        </div>
+
+        {/* Action Controls */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '16px' }}>
+          <button
+            type="button"
+            className="md3-button-filled md3-button-md"
+            onClick={handleToggleFocus}
+            style={{
+              background: isFocusActive ? 'var(--md-sys-color-error-container)' : 'var(--md-sys-color-surface-container-lowest)',
+              color: isFocusActive ? 'var(--md-sys-color-on-error-container)' : 'var(--md-sys-color-on-secondary-container)',
+              fontWeight: 800,
+              padding: '0 24px'
+            }}
           >
-            <RotateCcw size={14} />
+            {isFocusActive ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
+            {isFocusActive ? 'Pause Session' : 'Ignite 30m Focus'}
+          </button>
+
+          <button
+            type="button"
+            className="md3-button-tonal md3-button-sm"
+            onClick={() => handleResetFocusTimer(focusTargetMinutes)}
+            title="Reset timer"
+            style={{ padding: '0 12px' }}
+          >
+            <RotateCcw size={15} />
           </button>
         </div>
       </div>
 
-      {/* ── Morning Rituals List Group (Google Tasks Style) ─────────── */}
+      {/* ── Monitored Discipline 3: Sleep Tracker Card ─────────────── */}
+      <SleepTrackerCard />
+
+      {/* ── Morning Sovereign Sequence List ────────────────────────── */}
       <div className="md3-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Sun size={18} color="#d97706" />
-            <h2 style={{
-              fontFamily: 'var(--md-sys-typescale-title-medium-font)',
-              fontSize: 'var(--md-sys-typescale-title-medium-size)',
-              fontWeight: 700,
-              color: 'var(--md-sys-color-on-surface)'
-            }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
               Morning Sovereign Sequence
             </h2>
           </div>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>
-            {morningTasks.filter((t) => t.completed).length} / {morningTasks.length} Completed
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
+            {morningTasks.filter((t) => t.completed).length}/{morningTasks.length} Done
           </span>
         </div>
 
@@ -232,24 +275,18 @@ export const RoutineView: React.FC = () => {
               key={task.id}
               className="md3-list-group-item"
               onClick={() => handleToggleTask(task.id)}
-              style={{
-                background: task.completed ? 'var(--md-sys-color-surface-container)' : undefined
-              }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                {/* Rounded Checkbox */}
                 <div style={{
                   width: '24px',
                   height: '24px',
-                  borderRadius: '7px',
+                  borderRadius: '8px',
                   border: task.completed ? 'none' : '2px solid var(--md-sys-color-outline)',
                   background: task.completed ? 'var(--md-sys-color-primary)' : 'transparent',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: 'var(--md-sys-color-on-primary)',
-                  fontSize: '13px',
-                  fontWeight: 900,
                   flexShrink: 0,
                   transition: 'all 0.2s ease'
                 }}>
@@ -259,7 +296,7 @@ export const RoutineView: React.FC = () => {
                 <div>
                   <div style={{
                     fontSize: '13px',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     color: task.completed ? 'var(--md-sys-color-outline)' : 'var(--md-sys-color-on-surface)',
                     textDecoration: task.completed ? 'line-through' : 'none'
                   }}>
@@ -272,29 +309,24 @@ export const RoutineView: React.FC = () => {
               </div>
 
               <span className="md3-chip" style={{ height: '22px', fontSize: '10px', padding: '0 8px' }}>
-                {task.orderIndex}
+                Step {task.orderIndex}
               </span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── Evening Wind-Down List Group ───────────────────────────── */}
+      {/* ── Evening Wind-Down Sequence List ────────────────────────── */}
       <div className="md3-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Moon size={18} color="#4f46e5" />
-            <h2 style={{
-              fontFamily: 'var(--md-sys-typescale-title-medium-font)',
-              fontSize: 'var(--md-sys-typescale-title-medium-size)',
-              fontWeight: 700,
-              color: 'var(--md-sys-color-on-surface)'
-            }}>
-              Evening Wind-Down & Sleep Lock
+            <h2 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
+              Evening Wind-Down Checklist
             </h2>
           </div>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>
-            {eveningTasks.filter((t) => t.completed).length} / {eveningTasks.length} Done
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
+            {eveningTasks.filter((t) => t.completed).length}/{eveningTasks.length} Done
           </span>
         </div>
 
@@ -304,24 +336,20 @@ export const RoutineView: React.FC = () => {
               key={task.id}
               className="md3-list-group-item"
               onClick={() => handleToggleTask(task.id)}
-              style={{
-                background: task.completed ? 'var(--md-sys-color-surface-container)' : undefined
-              }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{
                   width: '24px',
                   height: '24px',
-                  borderRadius: '7px',
+                  borderRadius: '8px',
                   border: task.completed ? 'none' : '2px solid var(--md-sys-color-outline)',
                   background: task.completed ? 'var(--md-sys-color-primary)' : 'transparent',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: 'var(--md-sys-color-on-primary)',
-                  fontSize: '13px',
-                  fontWeight: 900,
-                  flexShrink: 0
+                  flexShrink: 0,
+                  transition: 'all 0.2s ease'
                 }}>
                   {task.completed && <CheckCircle2 size={16} />}
                 </div>
@@ -329,7 +357,7 @@ export const RoutineView: React.FC = () => {
                 <div>
                   <div style={{
                     fontSize: '13px',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     color: task.completed ? 'var(--md-sys-color-outline)' : 'var(--md-sys-color-on-surface)',
                     textDecoration: task.completed ? 'line-through' : 'none'
                   }}>
@@ -342,82 +370,10 @@ export const RoutineView: React.FC = () => {
               </div>
 
               <span className="md3-chip" style={{ height: '22px', fontSize: '10px', padding: '0 8px' }}>
-                {task.orderIndex}
+                Step {task.orderIndex}
               </span>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* ── Circadian Sleep Quality Logger ─────────────────────────── */}
-      <div className="md3-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Clock size={16} color="var(--md-sys-color-primary)" />
-            <h2 style={{
-              fontFamily: 'var(--md-sys-typescale-title-medium-font)',
-              fontSize: 'var(--md-sys-typescale-title-medium-size)',
-              fontWeight: 700,
-              color: 'var(--md-sys-color-on-surface)'
-            }}>
-              Circadian Sleep Logger
-            </h2>
-          </div>
-          {sleepSaved && (
-            <span style={{ fontSize: '11px', color: 'var(--md-sys-color-primary)', fontWeight: 700 }}>
-              Saved ✓
-            </span>
-          )}
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-          <div>
-            <label className="md3-field-label">Wake Time:</label>
-            <input
-              type="time"
-              className="md3-field-outlined"
-              value={wakeTime}
-              onChange={(e) => setWakeTime(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="md3-field-label">Bed Time:</label>
-            <input
-              type="time"
-              className="md3-field-outlined"
-              value={bedTime}
-              onChange={(e) => setBedTime(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>
-            Restoration Rating:
-          </span>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                onClick={() => {
-                  setSleepRating(star);
-                  setSleepSaved(true);
-                  setTimeout(() => setSleepSaved(false), 2500);
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: star <= sleepRating ? '#d97706' : 'var(--md-sys-color-outline-variant)',
-                  padding: '2px'
-                }}
-                aria-label={`Rate sleep ${star} of 5`}
-              >
-                <Star size={22} fill={star <= sleepRating ? '#d97706' : 'none'} />
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </div>

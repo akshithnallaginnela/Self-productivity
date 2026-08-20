@@ -1,20 +1,20 @@
 /**
- * MindsetView.tsx — Mindset Sanctuary & Archetype Resonance
+ * MindsetView.tsx — Mindset Sanctuary, Gemini AI Coach & Archetype Resonance
  *
- * Implements pure Material Design 3 (material.io) layout paradigms:
- *   1. M3 Segmented Button for instant Archetype selection (Eagle / Wolf / Tiger)
- *   2. Procedural Web Audio soundscape cards with live FFT waveform frequency visualizer
- *   3. Warrior Reflection Journal with local NLP sentiment scoring
- *   4. Grouped Past Reflections List
- *
- * All audio synthesis is computed in real-time in-browser via Web Audio API (0 external assets).
+ * Implements:
+ *   1. Gemini AI Warrior Coach directive & interactive chat advisor (GeminiCoachCard)
+ *   2. Modern Pill Archetype Switcher (Eagle / Wolf / Tiger)
+ *   3. Procedural Web Audio soundscape cards with live FFT waveform frequency visualizer
+ *   4. Warrior Reflection Journal with local NLP sentiment scoring
+ *   5. Grouped Past Reflections List with sleek borderless card styling
  */
 
 import React, { useState, useEffect } from 'react';
-import { Play, Square, Volume2, BookOpen, Send, Compass, Sparkles } from 'lucide-react';
+import { Play, Square, Volume2, BookOpen, Send, Compass, Sparkles, RefreshCw } from 'lucide-react';
 import { Archetype, JournalEntry, UserProfile } from '../../types';
 import { db } from '../../services/db';
 import { audioEngine, SOUNDSCAPE_TRACKS } from '../../services/audioEngine';
+import { GeminiCoachCard } from './GeminiCoachCard';
 
 /** Archetype-specific introspective prompts */
 const ARCHETYPE_PROMPTS: Record<Archetype, string[]> = {
@@ -35,9 +35,6 @@ const ARCHETYPE_PROMPTS: Record<Archetype, string[]> = {
   ]
 };
 
-/**
- * Renders the Material Design 3 Mindset Sanctuary.
- */
 export const MindsetView: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile>(db.getProfile());
   const [journals, setJournals] = useState<JournalEntry[]>(db.getJournals());
@@ -122,21 +119,24 @@ export const MindsetView: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* ── Top Header Bar ─────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <span className="md3-section-title">Mindset Sanctuary</span>
           <h1 className="md3-headline">Archetype Resonance</h1>
         </div>
-        <div className="md3-chip md3-chip-filled">
+        <div className="md3-chip md3-chip-filled" style={{ fontWeight: 800 }}>
           {profile.selectedArchetype} Archetype
         </div>
       </div>
 
-      {/* ── M3 Segmented Button Archetype Switcher ─────────────────── */}
-      <div className="md3-card" style={{ padding: '12px 14px' }}>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', display: 'block' }}>
+      {/* ── Gemini AI Warrior Coach Section ────────────────────────── */}
+      <GeminiCoachCard />
+
+      {/* ── Archetype Switcher Segmented Control ────────────────────── */}
+      <div className="md3-card" style={{ padding: '14px 18px' }}>
+        <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--md-sys-color-on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', display: 'block' }}>
           Select Mindset Archetype:
         </span>
         <div className="md3-segmented-group">
@@ -161,44 +161,51 @@ export const MindsetView: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Soundscape Synthesizer Card (M3 Tinted Container) ──────── */}
-      <div className="md3-card-tinted" style={{ padding: '20px' }}>
+      {/* ── Procedural Soundscape Synthesizer Card ─────────────────── */}
+      <div className="md3-card-elevated" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Volume2 size={18} />
+            <div style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: 'var(--md-sys-shape-full)',
+              background: 'var(--md-sys-color-primary-container)',
+              color: 'var(--md-sys-color-on-primary-container)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Volume2 size={20} />
+            </div>
             <div>
-              <h2 style={{
-                fontFamily: 'var(--md-sys-typescale-title-medium-font)',
-                fontSize: 'var(--md-sys-typescale-title-medium-size)',
-                fontWeight: 700
-              }}>
-                Web Audio Soundscapes
+              <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
+                Procedural Soundscapes
               </h2>
-              <p style={{ fontSize: '11px', opacity: 0.85 }}>
-                Procedurally synthesized in-browser · 100% free & offline
+              <p style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                Real-time Web Audio API synthesis · 100% free & offline
               </p>
             </div>
           </div>
 
-          {/* Live Waveform Bars */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '22px' }}>
-            {visualizerData.map((h, i) => (
+          {/* FFT Waveform Visualizer */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '28px', padding: '0 4px' }}>
+            {visualizerData.map((val, idx) => (
               <div
-                key={i}
+                key={idx}
                 style={{
                   width: '3px',
-                  height: `${h}px`,
-                  background: isPlaying ? 'var(--md-sys-color-on-primary-container)' : 'rgba(0, 0, 0, 0.15)',
+                  height: `${val}px`,
+                  background: isPlaying ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline-variant)',
                   borderRadius: '2px',
-                  transition: 'height 0.1s ease'
+                  transition: 'height 0.08s ease'
                 }}
               />
             ))}
           </div>
         </div>
 
-        {/* Track List */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+        {/* Soundscape Tracks Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '16px' }}>
           {SOUNDSCAPE_TRACKS.map((track) => {
             const isThisPlaying = isPlaying && activeTrackId === track.id;
             return (
@@ -206,131 +213,125 @@ export const MindsetView: React.FC = () => {
                 key={track.id}
                 onClick={() => handleToggleTrack(track.id)}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '12px 14px',
+                  padding: '14px',
                   borderRadius: 'var(--md-sys-shape-medium)',
-                  background: isThisPlaying ? 'var(--md-sys-color-surface-container-lowest)' : 'rgba(255, 255, 255, 0.35)',
-                  color: isThisPlaying ? 'var(--md-sys-color-on-surface)' : 'inherit',
+                  background: isThisPlaying ? 'var(--md-sys-color-primary-container)' : 'var(--md-sys-color-surface-container)',
+                  color: isThisPlaying ? 'var(--md-sys-color-on-primary-container)' : 'var(--md-sys-color-on-surface)',
                   cursor: 'pointer',
-                  border: isThisPlaying ? '1px solid var(--md-sys-color-primary)' : '1px solid rgba(0, 0, 0, 0.04)',
-                  transition: 'all 0.2s ease'
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                  transition: 'all 0.2s ease',
+                  boxShadow: isThisPlaying ? '0 4px 14px rgba(0,0,0,0.08)' : 'none'
                 }}
               >
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontWeight: 700, fontSize: '13px' }}>
-                      {track.name}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                      {track.frequency}
                     </span>
-                    <span style={{ fontSize: '10px', opacity: 0.75 }}>
-                      [{track.frequency}]
-                    </span>
+                    {isThisPlaying ? <Square size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
                   </div>
-                  <div style={{ fontSize: '11px', opacity: 0.85, marginTop: '2px' }}>
-                    {track.description}
+                  <div style={{ fontSize: '13px', fontWeight: 800, marginTop: '4px' }}>
+                    {track.name}
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  className={isThisPlaying ? 'md3-button-filled' : 'md3-button-tonal'}
-                  style={{ width: '36px', height: '36px', padding: 0, borderRadius: 'var(--md-sys-shape-full)', flexShrink: 0 }}
-                  aria-label={isThisPlaying ? 'Stop track' : 'Play track'}
-                >
-                  {isThisPlaying ? <Square size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
-                </button>
+                <div style={{ fontSize: '11px', opacity: 0.85, lineHeight: 1.3 }}>
+                  {track.description}
+                </div>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* ── Reflection Journal Card (M3 Surface Card) ──────────────── */}
+      {/* ── Warrior Reflection Journal Form ────────────────────────── */}
       <div className="md3-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <BookOpen size={16} color="var(--md-sys-color-primary)" />
-            <h2 style={{
-              fontFamily: 'var(--md-sys-typescale-title-medium-font)',
-              fontSize: 'var(--md-sys-typescale-title-medium-size)',
-              fontWeight: 700,
-              color: 'var(--md-sys-color-on-surface)'
-            }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BookOpen size={18} color="var(--md-sys-color-primary)" />
+            <h2 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
               Warrior Reflection Journal
             </h2>
           </div>
           <button
             type="button"
-            className="md3-button-text md3-button-sm"
             onClick={handleNewPrompt}
+            className="md3-button-text md3-button-sm"
+            style={{ fontSize: '11px', gap: '4px' }}
           >
-            <Compass size={12} />
-            New Prompt
+            <RefreshCw size={12} /> New Prompt
           </button>
         </div>
 
-        <form onSubmit={handleSaveJournal} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {/* Dynamic Introspective Prompt Box */}
-          <div style={{
-            background: 'var(--md-sys-color-surface-container)',
-            borderLeft: '3px solid var(--md-sys-color-primary)',
-            padding: '10px 12px',
-            borderRadius: '0 var(--md-sys-shape-small) var(--md-sys-shape-small) 0',
-            fontSize: '12px',
-            fontStyle: 'italic',
-            fontWeight: 600,
-            color: 'var(--md-sys-color-on-surface)'
-          }}>
-            "{currentPrompt}"
-          </div>
+        <div style={{
+          background: 'rgba(0,0,0,0.03)',
+          padding: '12px 14px',
+          borderRadius: 'var(--md-sys-shape-medium)',
+          fontSize: '13px',
+          fontStyle: 'italic',
+          fontWeight: 700,
+          marginBottom: '12px',
+          color: 'var(--md-sys-color-on-surface)'
+        }}>
+          "{currentPrompt}"
+        </div>
 
+        <form onSubmit={handleSaveJournal} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <textarea
-            required
             rows={3}
-            className="md3-field-outlined"
+            placeholder="Record your daily victory or mental battle..."
             value={journalContent}
             onChange={(e) => setJournalContent(e.target.value)}
-            placeholder="Write your reflections with total sovereign resolve..."
-            style={{ resize: 'none', lineHeight: '1.4' }}
+            className="md3-field-outlined"
+            style={{ resize: 'none', lineHeight: 1.5 }}
           />
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', color: journalSaved ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-on-surface-variant)', fontWeight: 600 }}>
-              {journalSaved ? 'Journal entry saved (+75 XP) ✓' : 'Local NLP sentiment analysis included'}
-            </span>
-            <button type="submit" className="md3-button-filled md3-button-sm">
-              <Send size={13} />
-              Save Entry
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="md3-button-filled md3-button-md"
+            style={{ width: '100%', gap: '6px', fontWeight: 800 }}
+          >
+            <Send size={15} /> Save Reflection (+75 XP)
+          </button>
+
+          {journalSaved && (
+            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--md-sys-color-tertiary)', textAlign: 'center' }}>
+              ✓ Warrior reflection saved!
+            </div>
+          )}
         </form>
 
-        {/* Grouped Past Journals */}
-        <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)', textTransform: 'uppercase' }}>
-            Past Logs ({journals.length})
-          </span>
-          <div className="md3-list-group">
-            {journals.slice(0, 2).map((j) => (
-              <div key={j.id} className="md3-list-group-item" style={{ cursor: 'default' }}>
-                <div style={{ width: '100%' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>
-                      {j.date} · [{j.archetype}]
-                    </span>
-                    <span className="md3-chip md3-chip-filled" style={{ height: '18px', fontSize: '9px', padding: '0 6px' }}>
-                      Sentiment: +{(j.sentimentScore * 100).toFixed(0)}%
-                    </span>
+        {/* Recent Journals List */}
+        {journals.length > 0 && (
+          <div style={{ marginTop: '16px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--md-sys-color-on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', display: 'block' }}>
+              Past Reflections ({journals.length}):
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {journals.slice(0, 3).map((j) => (
+                <div
+                  key={j.id}
+                  style={{
+                    padding: '12px',
+                    borderRadius: 'var(--md-sys-shape-medium)',
+                    background: 'var(--md-sys-color-surface-container)',
+                    fontSize: '12px'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--md-sys-color-on-surface-variant)', fontSize: '10px', fontWeight: 700 }}>
+                    <span>{j.date} · {j.archetype}</span>
+                    <span>Sentiment: {Math.round(j.sentimentScore * 100)}% Clarity</span>
                   </div>
-                  <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface)', marginTop: '4px', lineHeight: '1.4' }}>
+                  <div style={{ marginTop: '4px', fontWeight: 600, color: 'var(--md-sys-color-on-surface)' }}>
                     {j.content}
-                  </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -113,3 +113,58 @@ export interface SoundscapeTrack {
   beatFreq: number;
   durationMinutes: number;
 }
+
+export interface GpsWalkSession {
+  id: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // ISO string
+  endTime?: string;
+  durationSeconds: number;
+  distanceMeters: number;
+  stepsCount: number;
+  targetSteps: number;
+  completed: boolean;
+  coordinates: Array<{ lat: number; lng: number; timestamp: number }>;
+}
+
+export interface FocusSession {
+  id: string;
+  date: string; // YYYY-MM-DD
+  targetMinutes: number;
+  completedMinutes: number;
+  completed: boolean;
+  timestamp: string;
+  soundTrack?: string;
+}
+
+export interface SleepSession {
+  id: string;
+  date: string; // YYYY-MM-DD
+  bedTime: string;
+  wakeTime: string;
+  durationHours: number;
+  qualityRating: number; // 1-5
+  windDownMinutes: number;
+  completed: boolean;
+  loggedAt: string;
+}
+
+export interface GeminiCoachInsight {
+  id: string;
+  date: string; // YYYY-MM-DD
+  archetype: Archetype;
+  title: string;
+  quote: string;
+  dailyDirective: string;
+  urgeStrategy: string;
+  aiAdvice: string;
+  generatedAt: string;
+}
+
+export interface GeminiMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+

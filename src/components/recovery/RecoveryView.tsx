@@ -1,16 +1,16 @@
 /**
- * RecoveryView.tsx — Duolingo-Style Dynamic Sobriety Streak Dashboard
+ * RecoveryView.tsx — Monitored Disciplines & Dynamic Sobriety Streak Hub
  *
- * Implements pure Material Design 3 (material.io) layout paradigms & Duolingo streak rules:
- *   1. Dynamic streak tracking: streak ONLY advances when at least 1 task/habit is completed today.
- *   2. Real-time Streak Status Indicator:
- *      - "🔥 Streak Secured Today!" when ≥1 task completed today
- *      - "⚠️ Streak At Risk!" with 1-tap quick actions when pending today's task
- *   3. Confetti celebration cannon upon earning today's streak extension.
- *   4. Milestone Badges chamber with auto-unlock progress.
- *   5. Subconscious Trigger Radar with inline form & resistance logs.
- *
- * 100% dynamic, reactive, and fluidly responsive across all screen dimensions.
+ * Implements:
+ *   1. Monitored Streak Integrity: Streaks ONLY advance when genuine monitored tasks are completed
+ *      (GPS Walk, 30m Focus Timer, Sleep Session, or Verified Habit).
+ *   2. Real-time Monitored Discipline Verification Hub:
+ *      - 🚶‍♂️ GPS Walk Status (Steps & Distance)
+ *      - ⏱️ 30m Deep Focus Status
+ *      - 🌙 Circadian Sleep Log Status
+ *      - ⚡ Sovereign Habit Disciplines
+ *   3. Modern Glassmorphic UI with glowing radial progress ring & confetti celebration.
+ *   4. Milestone Badges Chamber & Subconscious Trigger Radar.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -24,11 +24,12 @@ import {
   Zap,
   ShieldCheck,
   CheckCircle2,
-  ListTodo,
-  BookOpen,
-  IndianRupee,
+  Footprints,
+  Clock,
+  Moon,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  ShieldAlert
 } from 'lucide-react';
 import { UserProfile, MilestoneBadge, TriggerLog, TriggerCategory } from '../../types';
 import { db } from '../../services/db';
@@ -38,13 +39,11 @@ interface RecoveryViewProps {
   onOpenCrisis: () => void;
 }
 
-/**
- * Renders the Duolingo-style Dynamic Recovery Dashboard.
- */
-export const RecoveryView: React.FC<RecoveryViewProps> = () => {
+export const RecoveryView: React.FC<RecoveryViewProps> = ({ onOpenCrisis }) => {
   const [profile, setProfile] = useState<UserProfile>(db.getProfile());
   const [badges, setBadges] = useState<MilestoneBadge[]>(db.getBadges());
   const [triggers, setTriggers] = useState<TriggerLog[]>(db.getTriggers());
+  const [disciplinesStatus, setDisciplinesStatus] = useState(db.getTodayDisciplinesStatus());
 
   /** Inline trigger form visibility */
   const [showTriggerForm, setShowTriggerForm] = useState<boolean>(false);
@@ -52,9 +51,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
   const [triggerDesc, setTriggerDesc] = useState<string>('');
   const [triggerIntensity, setTriggerIntensity] = useState<number>(5);
 
-  /** Checks if streak is already earned today */
-  const isSecuredToday = db.isStreakSecuredToday();
-  const tasksDoneToday = profile.tasksCompletedToday || 0;
+  const isSecuredToday = disciplinesStatus.isStreakSecured;
 
   /**
    * Subscribes to reactive database state updates.
@@ -64,27 +61,24 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
       setProfile(db.getProfile());
       setBadges(db.getBadges());
       setTriggers(db.getTriggers());
+      setDisciplinesStatus(db.getTodayDisciplinesStatus());
     });
     return () => unsub();
   }, []);
 
   /** Computes the SVG circle progress stroke-dashoffset. */
   const computeRingProgress = (): number => {
-    const nextMilestone = badges.find(b => !b.unlocked);
+    const nextMilestone = badges.find((b) => !b.unlocked);
     if (!nextMilestone) return 0;
     const progress = Math.min(1, profile.currentStreak / nextMilestone.daysRequired);
     const circumference = 2 * Math.PI * 52;
-    return circumference - (circumference * progress);
+    return circumference - circumference * progress;
   };
 
-  /** Finds the next locked badge target. */
   const getNextMilestone = (): MilestoneBadge | undefined => {
-    return badges.find(b => !b.unlocked);
+    return badges.find((b) => !b.unlocked);
   };
 
-  /**
-   * Fires a festive confetti cannon when the daily streak is extended.
-   */
   const triggerConfettiCelebration = () => {
     confetti({
       particleCount: 60,
@@ -94,7 +88,6 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
     });
   };
 
-  /** Handles logging a new urge trigger event. */
   const handleLogTrigger = (e: React.FormEvent) => {
     e.preventDefault();
     if (!triggerDesc.trim()) return;
@@ -103,7 +96,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
       category: triggerCategory,
       description: triggerDesc,
       intensity: triggerIntensity,
-      resisted: true,
+      resisted: true
     });
 
     triggerConfettiCelebration();
@@ -111,31 +104,18 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
     setShowTriggerForm(false);
   };
 
-  /** Completes a quick daily check-in habit to extend today's streak */
-  const handleQuickCheckin = () => {
-    const routines = db.getRoutines();
-    const nextPending = routines.find(r => !r.completed);
-    if (nextPending) {
-      db.toggleRoutineTask(nextPending.id);
-    } else {
-      // If all routines done, record daily sovereignty check
-      db.recordTaskCompletionAndEvaluateStreak('Daily Sovereignty Check-in');
-    }
-    triggerConfettiCelebration();
-  };
-
   const circumference = 2 * Math.PI * 52;
   const nextMilestone = getNextMilestone();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
       {/* ── Top Header Bar ─────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <span className="md3-section-title">Sobriety Shield</span>
           <h1 className="md3-headline">Recovery Matrix</h1>
         </div>
-        <div className="md3-chip md3-chip-filled" style={{ gap: '4px' }}>
+        <div className="md3-chip md3-chip-filled" style={{ gap: '6px', fontWeight: 800 }}>
           <Zap size={14} color="var(--md-sys-color-primary)" />
           <span>{profile.xpPoints} XP</span>
         </div>
@@ -147,15 +127,15 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
           background: 'var(--md-sys-color-error-container)',
           color: 'var(--md-sys-color-on-error-container)',
           borderRadius: 'var(--md-sys-shape-medium)',
-          padding: '12px 14px',
+          padding: '12px 16px',
           fontSize: '12px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: '8px',
-          fontWeight: 600
+          fontWeight: 700
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <AlertTriangle size={16} />
             <span>{profile.streakResetReason}</span>
           </div>
@@ -168,7 +148,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
               color: 'inherit',
               cursor: 'pointer',
               fontWeight: 800,
-              padding: '2px 6px'
+              padding: '4px 8px'
             }}
           >
             Dismiss
@@ -176,20 +156,24 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
         </div>
       )}
 
-      {/* ── Hero Streak Container Card (M3 Tinted Container) ───────── */}
-      <div className="md3-card-tinted" style={{ padding: '24px 16px', textAlign: 'center' }}>
+      {/* ── Hero Streak Container Card (Fluid Modern Aura) ─────────── */}
+      <div className="md3-card-tinted" style={{ padding: '24px 18px', textAlign: 'center' }}>
         <div style={{ position: 'relative', display: 'inline-block' }}>
-          <svg width="136" height="136" viewBox="0 0 120 120">
+          <svg width="144" height="144" viewBox="0 0 120 120">
             {/* Background circular track */}
             <circle
-              cx="60" cy="60" r="52"
+              cx="60"
+              cy="60"
+              r="52"
               fill="none"
-              stroke="rgba(0, 0, 0, 0.08)"
+              stroke="rgba(0, 0, 0, 0.06)"
               strokeWidth="8"
             />
-            {/* Active progress indicator */}
+            {/* Active progress indicator with glowing stroke */}
             <circle
-              cx="60" cy="60" r="52"
+              cx="60"
+              cy="60"
+              r="52"
               fill="none"
               stroke="var(--md-sys-color-on-primary-container)"
               strokeWidth="8"
@@ -197,21 +181,25 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
               strokeDasharray={circumference}
               strokeDashoffset={computeRingProgress()}
               transform="rotate(-90 60 60)"
-              style={{ transition: 'stroke-dashoffset 0.8s var(--md-sys-motion-easing-emphasized)' }}
+              style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.2, 0.0, 0.0, 1.0)' }}
             />
             {/* Center streak days count */}
-            <text 
-              x="60" y="56" textAnchor="middle"
+            <text
+              x="60"
+              y="56"
+              textAnchor="middle"
               fill="var(--md-sys-color-on-primary-container)"
-              style={{ fontFamily: 'var(--md-sys-typescale-display-large-font)', fontSize: '38px', fontWeight: 800 }}
+              style={{ fontFamily: 'var(--md-sys-typescale-display-large-font)', fontSize: '38px', fontWeight: 900 }}
             >
               {profile.currentStreak}
             </text>
-            <text 
-              x="60" y="74" textAnchor="middle"
+            <text
+              x="60"
+              y="74"
+              textAnchor="middle"
               fill="var(--md-sys-color-on-primary-container)"
               opacity="0.85"
-              style={{ fontFamily: 'var(--md-sys-typescale-label-medium-font)', fontSize: '11px', fontWeight: 700 }}
+              style={{ fontFamily: 'var(--md-sys-typescale-label-medium-font)', fontSize: '11px', fontWeight: 800 }}
             >
               DAYS SOBER
             </text>
@@ -220,9 +208,9 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
           {/* Animated flame */}
           <span className="animate-flame" style={{
             position: 'absolute',
-            bottom: '0',
-            right: '0',
-            fontSize: '28px'
+            bottom: '2px',
+            right: '2px',
+            fontSize: '30px'
           }}>
             🔥
           </span>
@@ -230,102 +218,137 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
 
         {/* Streak summary text */}
         <div style={{ marginTop: '12px' }}>
-          <p style={{
-            fontFamily: 'var(--md-sys-typescale-body-medium-font)',
-            fontSize: '14px',
-            fontWeight: 600,
-            color: 'var(--md-sys-color-on-primary-container)'
-          }}>
+          <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--md-sys-color-on-primary-container)' }}>
             Longest Record: <strong>{profile.longestStreak} days</strong> · Rank: <strong>{profile.warriorRank}</strong>
           </p>
 
           {nextMilestone && (
-            <p style={{
-              fontFamily: 'var(--md-sys-typescale-label-small-font)',
-              fontSize: '12px',
-              fontWeight: 600,
-              opacity: 0.85,
-              marginTop: '4px'
-            }}>
-              <Target size={12} style={{ verticalAlign: 'middle', marginRight: '3px' }} />
+            <p style={{ fontSize: '12px', fontWeight: 600, opacity: 0.85, marginTop: '4px' }}>
+              <Target size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
               Next Milestone: {nextMilestone.title} ({nextMilestone.daysRequired - profile.currentStreak}d remaining)
             </p>
           )}
         </div>
 
-        {/* ── Duolingo Daily Streak Dynamic Status Box ─────────────── */}
+        {/* ── Monitored Disciplines Status Box ───────────────────────── */}
         <div style={{
           marginTop: '16px',
-          padding: '12px 14px',
-          background: isSecuredToday ? 'var(--md-sys-color-surface-container-lowest)' : 'rgba(255, 255, 255, 0.65)',
-          borderRadius: 'var(--md-sys-shape-medium)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          padding: '14px 16px',
+          background: isSecuredToday ? 'rgba(255, 255, 255, 0.92)' : 'rgba(255, 255, 255, 0.75)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: 'var(--md-sys-shape-large)',
           textAlign: 'left',
-          boxShadow: 'var(--md-sys-elevation-1)'
+          boxShadow: '0 4px 16px rgba(0,0,0,0.04)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: 'var(--md-sys-shape-full)',
-              background: isSecuredToday ? 'var(--md-sys-color-tertiary-container)' : 'var(--md-sys-color-error-container)',
-              color: isSecuredToday ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-on-error-container)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}>
-              {isSecuredToday ? <CheckCircle2 size={20} /> : <Flame size={20} />}
-            </div>
-
-            <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
-                fontSize: '13px',
-                fontWeight: 800,
-                color: isSecuredToday ? 'var(--md-sys-color-on-surface)' : 'var(--md-sys-color-error)'
+                width: '38px',
+                height: '38px',
+                borderRadius: 'var(--md-sys-shape-full)',
+                background: isSecuredToday ? 'var(--md-sys-color-tertiary-container)' : 'var(--md-sys-color-error-container)',
+                color: isSecuredToday ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-on-error-container)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
               }}>
-                {isSecuredToday ? 'Streak Secured for Today! ✓' : 'Streak Pending for Today!'}
+                {isSecuredToday ? <CheckCircle2 size={22} /> : <Flame size={22} />}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)', marginTop: '2px' }}>
-                {isSecuredToday
-                  ? `${tasksDoneToday} task(s) completed today · Keep going!`
-                  : 'Complete at least 1 task today to extend your streak.'}
+
+              <div>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  color: isSecuredToday ? 'var(--md-sys-color-on-surface)' : 'var(--md-sys-color-error)'
+                }}>
+                  {isSecuredToday ? 'Streak Secured for Today! ✓' : 'Streak Verification Pending!'}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)', marginTop: '2px' }}>
+                  {isSecuredToday
+                    ? `${disciplinesStatus.monitoredDoneCount} monitored discipline(s) completed today.`
+                    : 'Complete at least 1 verified discipline below to extend your streak:'}
+                </div>
               </div>
             </div>
           </div>
 
-          {!isSecuredToday && (
-            <button
-              type="button"
-              className="md3-button-filled md3-button-sm"
-              onClick={handleQuickCheckin}
-              style={{ flexShrink: 0, gap: '4px' }}
-            >
-              <Sparkles size={13} />
-              Complete 1
-            </button>
-          )}
+          {/* Monitored Verification Checklist Badges */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '12px' }}>
+            <div style={{
+              padding: '8px 10px',
+              borderRadius: 'var(--md-sys-shape-medium)',
+              background: disciplinesStatus.walkDone ? 'var(--md-sys-color-tertiary-container)' : 'rgba(0,0,0,0.03)',
+              color: disciplinesStatus.walkDone ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-on-surface-variant)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '11px',
+              fontWeight: 700
+            }}>
+              <Footprints size={14} />
+              <span>{disciplinesStatus.walkDone ? `Walk: ${disciplinesStatus.walkSteps} steps ✓` : 'GPS Walk (3k steps)'}</span>
+            </div>
+
+            <div style={{
+              padding: '8px 10px',
+              borderRadius: 'var(--md-sys-shape-medium)',
+              background: disciplinesStatus.focusDone ? 'var(--md-sys-color-tertiary-container)' : 'rgba(0,0,0,0.03)',
+              color: disciplinesStatus.focusDone ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-on-surface-variant)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '11px',
+              fontWeight: 700
+            }}>
+              <Clock size={14} />
+              <span>{disciplinesStatus.focusDone ? '30m Focus Done ✓' : '30m Focus Timer'}</span>
+            </div>
+
+            <div style={{
+              padding: '8px 10px',
+              borderRadius: 'var(--md-sys-shape-medium)',
+              background: disciplinesStatus.sleepDone ? 'var(--md-sys-color-tertiary-container)' : 'rgba(0,0,0,0.03)',
+              color: disciplinesStatus.sleepDone ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-on-surface-variant)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '11px',
+              fontWeight: 700
+            }}>
+              <Moon size={14} />
+              <span>{disciplinesStatus.sleepDone ? `Sleep: ${disciplinesStatus.sleepHours}h ✓` : 'Sleep & Wind-down'}</span>
+            </div>
+
+            <div style={{
+              padding: '8px 10px',
+              borderRadius: 'var(--md-sys-shape-medium)',
+              background: disciplinesStatus.routinesDone > 0 ? 'var(--md-sys-color-tertiary-container)' : 'rgba(0,0,0,0.03)',
+              color: disciplinesStatus.routinesDone > 0 ? 'var(--md-sys-color-on-tertiary-container)' : 'var(--md-sys-color-on-surface-variant)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '11px',
+              fontWeight: 700
+            }}>
+              <Zap size={14} />
+              <span>{disciplinesStatus.routinesDone > 0 ? `${disciplinesStatus.routinesDone} Habit(s) Done ✓` : 'Sovereign Habits'}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ── Milestone Badges Chamber (M3 Surface Card) ─────────────── */}
+      {/* ── Milestone Badges Chamber ───────────────────────────────── */}
       <div className="md3-card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Trophy size={18} color="var(--md-sys-color-primary)" />
-            <h2 style={{
-              fontFamily: 'var(--md-sys-typescale-title-medium-font)',
-              fontSize: 'var(--md-sys-typescale-title-medium-size)',
-              fontWeight: 700,
-              color: 'var(--md-sys-color-on-surface)'
-            }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
               Milestone Badges
             </h2>
           </div>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>
-            {badges.filter(b => b.unlocked).length} of {badges.length} Unlocked
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
+            {badges.filter((b) => b.unlocked).length} of {badges.length} Unlocked
           </span>
         </div>
 
@@ -339,14 +362,12 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
                 textAlign: 'center',
                 padding: '10px 4px',
                 borderRadius: 'var(--md-sys-shape-medium)',
-                background: badge.unlocked 
-                  ? 'var(--md-sys-color-secondary-container)' 
+                background: badge.unlocked
+                  ? 'var(--md-sys-color-secondary-container)'
                   : 'var(--md-sys-color-surface-container)',
-                border: badge.unlocked 
-                  ? '1px solid var(--md-sys-color-primary)' 
-                  : '1px solid var(--md-sys-color-outline-variant)',
                 opacity: badge.unlocked ? 1 : 0.45,
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                boxShadow: badge.unlocked ? '0 2px 8px rgba(0,0,0,0.04)' : 'none'
               }}
             >
               <div style={{ fontSize: '22px' }}>{badge.icon}</div>
@@ -355,7 +376,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
                 fontSize: '10px',
                 fontWeight: 800,
                 color: badge.unlocked ? 'var(--md-sys-color-on-secondary-container)' : 'var(--md-sys-color-on-surface-variant)',
-                marginTop: '3px'
+                marginTop: '4px'
               }}>
                 {badge.daysRequired}d
               </div>
@@ -364,21 +385,17 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
         </div>
       </div>
 
-      {/* ── Subconscious Trigger Radar (M3 Grouped Card) ──────────── */}
+      {/* ── Subconscious Trigger Radar ─────────────────────────────── */}
       <div className="md3-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <AlertTriangle size={18} color="var(--md-sys-color-error)" />
-            <h2 style={{
-              fontFamily: 'var(--md-sys-typescale-title-medium-font)',
-              fontSize: 'var(--md-sys-typescale-title-medium-size)',
-              fontWeight: 700,
-              color: 'var(--md-sys-color-on-surface)'
-            }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
               Subconscious Trigger Radar
             </h2>
           </div>
           <button
+            type="button"
             className="md3-button-tonal md3-button-sm"
             onClick={() => setShowTriggerForm(!showTriggerForm)}
           >
@@ -389,8 +406,8 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
 
         {/* Inline trigger logging form */}
         {showTriggerForm && (
-          <form 
-            onSubmit={handleLogTrigger} 
+          <form
+            onSubmit={handleLogTrigger}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -431,7 +448,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
                 Urge Intensity: <strong>{triggerIntensity}/10</strong>
               </span>
               <input
@@ -444,28 +461,44 @@ export const RecoveryView: React.FC<RecoveryViewProps> = () => {
               />
             </div>
 
-            <button type="submit" className="md3-button-filled" style={{ marginTop: '4px' }}>
+            <button type="submit" className="md3-button-filled md3-button-md" style={{ marginTop: '6px', fontWeight: 800 }}>
               <ShieldCheck size={16} />
               Log Urge & Resist (+50 XP)
             </button>
           </form>
         )}
 
-        {/* Grouped trigger items */}
-        <div className="md3-list-group">
-          {triggers.slice(0, 3).map((t) => (
-            <div key={t.id} className="md3-list-group-item" style={{ cursor: 'default' }}>
+        {/* Triggers Log Summary */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {triggers.slice(0, 3).map((trig) => (
+            <div
+              key={trig.id}
+              style={{
+                padding: '12px 14px',
+                borderRadius: 'var(--md-sys-shape-medium)',
+                background: 'var(--md-sys-color-surface-container)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--md-sys-color-on-surface)' }}>
-                  {t.description}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="md3-chip" style={{ height: '20px', fontSize: '9px', padding: '0 6px', background: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}>
+                    {trig.category}
+                  </span>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
+                    Intensity {trig.intensity}/10
+                  </span>
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)', marginTop: '2px' }}>
-                  {t.category} · Intensity: {t.intensity}/10 · {new Date(t.recordedAt).toLocaleDateString()}
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--md-sys-color-on-surface)', marginTop: '4px' }}>
+                  {trig.description}
                 </div>
               </div>
-              <span className="md3-chip md3-chip-filled" style={{ height: '24px', fontSize: '10px' }}>
+
+              <div style={{ color: 'var(--md-sys-color-tertiary)', fontWeight: 800, fontSize: '11px' }}>
                 Resisted ✓
-              </span>
+              </div>
             </div>
           ))}
         </div>

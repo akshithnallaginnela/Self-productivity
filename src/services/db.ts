@@ -20,7 +20,11 @@ import {
   RoutineTask,
   JournalEntry,
   MilestoneBadge,
-  Archetype
+  Archetype,
+  GpsWalkSession,
+  FocusSession,
+  SleepSession,
+  GeminiCoachInsight
 } from '../types';
 import { widgetBridge } from './widgetBridge';
 
@@ -32,7 +36,11 @@ const STORAGE_KEYS = {
   TRIGGERS: 'rw_triggers_v1',
   ROUTINE_TASKS: 'rw_routine_tasks_v1',
   JOURNALS: 'rw_journals_v1',
-  BADGES: 'rw_badges_v1'
+  BADGES: 'rw_badges_v1',
+  WALK_SESSIONS: 'rw_walk_sessions_v1',
+  FOCUS_SESSIONS: 'rw_focus_sessions_v1',
+  SLEEP_SESSIONS: 'rw_sleep_sessions_v1',
+  COACH_INSIGHTS: 'rw_coach_insights_v1'
 };
 
 /** Seed Badges configuration covering 1-day to 365-day milestones */
@@ -640,7 +648,158 @@ class LocalDatabase {
     const rows = income.map(e => `"${e.id}","${e.createdAt.split('T')[0]}","${e.clientName}","${e.source}",${e.amount},${e.isPaid ? 'YES' : 'NO'},"${e.projectDescription || ''}"`).join('\n');
     return header + rows;
   }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * MONITORED DISCIPLINES: GPS WALKING, FOCUS, SLEEP & GEMINI AI COACH
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /**
+   * Retrieves all logged GPS walking sessions.
+   */
+  public getWalkSessions(): GpsWalkSession[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.WALK_SESSIONS);
+    return raw ? JSON.parse(raw) : [];
+  }
+
+  /**
+   * Saves a GPS walking session and extends the streak if verified completed.
+   */
+  public saveWalkSession(session: GpsWalkSession): void {
+    const sessions = this.getWalkSessions();
+    const updated = [session, ...sessions];
+    localStorage.setItem(STORAGE_KEYS.WALK_SESSIONS, JSON.stringify(updated));
+
+    if (session.completed) {
+      const profile = this.getProfile();
+      this.updateProfile({ xpPoints: profile.xpPoints + 120 });
+      this.recordTaskCompletionAndEvaluateStreak(`GPS Walk: ${session.stepsCount} steps (${(session.distanceMeters / 1000).toFixed(1)} km)`);
+    }
+
+    this.notify();
+  }
+
+  /**
+   * Retrieves all logged 30-min deep focus sessions.
+   */
+  public getFocusSessions(): FocusSession[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.FOCUS_SESSIONS);
+    return raw ? JSON.parse(raw) : [];
+  }
+
+  /**
+   * Saves a completed 30-min focus session and extends the streak.
+   */
+  public saveFocusSession(session: FocusSession): void {
+    const sessions = this.getFocusSessions();
+    const updated = [session, ...sessions];
+    localStorage.setItem(STORAGE_KEYS.FOCUS_SESSIONS, JSON.stringify(updated));
+
+    if (session.completed) {
+      const profile = this.getProfile();
+      this.updateProfile({ xpPoints: profile.xpPoints + 100 });
+      this.recordTaskCompletionAndEvaluateStreak(`30m Deep Focus Session Completed`);
+    }
+
+    this.notify();
+  }
+
+  /**
+   * Retrieves all logged sleep sessions.
+   */
+  public getSleepSessions(): SleepSession[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.SLEEP_SESSIONS);
+    return raw ? JSON.parse(raw) : [];
+  }
+
+  /**
+   * Saves a verified sleep session and extends the streak.
+   */
+  public saveSleepSession(session: SleepSession): void {
+    const sessions = this.getSleepSessions();
+    const updated = [session, ...sessions];
+    localStorage.setItem(STORAGE_KEYS.SLEEP_SESSIONS, JSON.stringify(updated));
+
+    if (session.completed) {
+      const profile = this.getProfile();
+      this.updateProfile({ xpPoints: profile.xpPoints + 80 });
+      this.recordTaskCompletionAndEvaluateStreak(`Sleep Rest Logged: ${session.durationHours}h (${session.qualityRating}★)`);
+    }
+
+    this.notify();
+  }
+
+  /**
+   * Retrieves stored Gemini AI coaching insights.
+   */
+  public getCoachInsights(): GeminiCoachInsight[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.COACH_INSIGHTS);
+    return raw ? JSON.parse(raw) : [];
+  }
+
+  /**
+   * Saves a newly generated Gemini AI coaching insight.
+   */
+  public saveCoachInsight(insight: GeminiCoachInsight): void {
+    const insights = this.getCoachInsights();
+    const updated = [insight, ...insights.filter(i => i.date !== insight.date)].slice(0, 10);
+    localStorage.setItem(STORAGE_KEYS.COACH_INSIGHTS, JSON.stringify(updated));
+    this.notify();
+  }
+
+  /**
+   * Computes today's real-time monitored discipline status across GPS Walk, 30m Focus, Sleep, & Routines.
+   */
+  public getTodayDisciplinesStatus(): {
+    walkDone: boolean;
+    walkSteps: number;
+    walkDistanceKm: number;
+    focusDone: boolean;
+    focusMinutes: number;
+    sleepDone: boolean;
+    sleepHours: number;
+    routinesDone: number;
+    totalRoutines: number;
+    isStreakSecured: boolean;
+    monitoredDoneCount: number;
+  } {
+    const today = new Date().toISOString().split('T')[0];
+    const walks = this.getWalkSessions().filter(w => w.date === today && w.completed);
+    const focus = this.getFocusSessions().filter(f => f.date === today && f.completed);
+    const sleep = this.getSleepSessions().filter(s => s.date === today && s.completed);
+    const routines = this.getRoutines();
+    const completedRoutines = routines.filter(r => r.completed).length;
+
+    const totalSteps = walks.reduce((acc, w) => acc + w.stepsCount, 0);
+    const totalDistMeters = walks.reduce((acc, w) => acc + w.distanceMeters, 0);
+    const totalFocusMins = focus.reduce((acc, f) => acc + f.completedMinutes, 0);
+    const latestSleep = sleep[0];
+
+    const walkDone = totalSteps >= 500 || totalDistMeters >= 400 || walks.length > 0;
+    const focusDone = totalFocusMins >= 25 || focus.length > 0;
+    const sleepDone = sleep.length > 0;
+
+    let monitoredDoneCount = 0;
+    if (walkDone) monitoredDoneCount++;
+    if (focusDone) monitoredDoneCount++;
+    if (sleepDone) monitoredDoneCount++;
+    if (completedRoutines > 0) monitoredDoneCount++;
+
+    return {
+      walkDone,
+      walkSteps: totalSteps,
+      walkDistanceKm: Math.round((totalDistMeters / 1000) * 10) / 10,
+      focusDone,
+      focusMinutes: totalFocusMins,
+      sleepDone,
+      sleepHours: latestSleep ? latestSleep.durationHours : 0,
+      routinesDone: completedRoutines,
+      totalRoutines: routines.length,
+      isStreakSecured: this.isStreakSecuredToday(),
+      monitoredDoneCount
+    };
+  }
 }
 
 /** Singleton database instance exported for application-wide use */
 export const db = new LocalDatabase();
+

@@ -72,14 +72,14 @@
   --md-sys-typescale-label-small-tracking: 0.6px;
 
   /* ──────────────────────────────────────────────────────────────────────────
-   * 2. SHAPE SCALE (Official M3 Corner Radii)
+   * 2. SHAPE SCALE (Modern Fluid Curves & Apple / M3 Expressive Radii)
    * ──────────────────────────────────────────────────────────────────────── */
   --md-sys-shape-none:        0px;
-  --md-sys-shape-extra-small: 4px;
-  --md-sys-shape-small:       8px;
-  --md-sys-shape-medium:      14px;
-  --md-sys-shape-large:       20px;
-  --md-sys-shape-extra-large: 28px;
+  --md-sys-shape-extra-small: 6px;
+  --md-sys-shape-small:       12px;
+  --md-sys-shape-medium:      18px;
+  --md-sys-shape-large:       24px;
+  --md-sys-shape-extra-large: 32px;
   --md-sys-shape-full:        9999px;
 
   /* ──────────────────────────────────────────────────────────────────────────
@@ -98,21 +98,26 @@
   --md-sys-motion-duration-long1:       500ms;
 
   /* ──────────────────────────────────────────────────────────────────────────
-   * 4. TONAL ELEVATION SHADOW ROLES
+   * 4. MODERN AMBIENT ELEVATION SHADOWS (Ultra-soft, Zero Harsh Outlines)
    * ──────────────────────────────────────────────────────────────────────── */
   --md-sys-elevation-0: none;
-  --md-sys-elevation-1: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
-  --md-sys-elevation-2: 0 3px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
-  --md-sys-elevation-3: 0 6px 12px -2px rgba(0, 0, 0, 0.06), 0 3px 6px -3px rgba(0, 0, 0, 0.06);
-  --md-sys-elevation-4: 0 10px 16px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.06);
+  --md-sys-elevation-1: 0 4px 20px -2px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  --md-sys-elevation-2: 0 10px 28px -4px rgba(15, 23, 42, 0.07), 0 4px 10px -2px rgba(15, 23, 42, 0.03);
+  --md-sys-elevation-3: 0 18px 38px -6px rgba(15, 23, 42, 0.10), 0 6px 16px -3px rgba(15, 23, 42, 0.04);
+  --md-sys-elevation-4: 0 24px 48px -8px rgba(15, 23, 42, 0.14), 0 8px 20px -4px rgba(15, 23, 42, 0.05);
+
+  /* Glassmorphism Surface Filters */
+  --md-sys-glass-bg:            rgba(255, 255, 255, 0.82);
+  --md-sys-glass-border:        rgba(255, 255, 255, 0.6);
+  --md-sys-glass-blur:          blur(16px);
 
   /* ──────────────────────────────────────────────────────────────────────────
    * 5. ERROR & UNIVERSAL ROLES
    * ──────────────────────────────────────────────────────────────────────── */
-  --md-sys-color-error:              #ba1a1a;
+  --md-sys-color-error:              #e11d48;
   --md-sys-color-on-error:           #ffffff;
-  --md-sys-color-error-container:    #ffdad6;
-  --md-sys-color-on-error-container: #410002;
+  --md-sys-color-error-container:    #ffe4e6;
+  --md-sys-color-on-error-container: #881337;
 
   --md-sys-state-hover-opacity:    0.06;
   --md-sys-state-pressed-opacity:  0.10;
